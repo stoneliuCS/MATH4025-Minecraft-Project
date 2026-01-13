@@ -1,1 +1,27 @@
 *.jar
+.venv
+
+# Minecraft server generated files
+eula.txt
+server.properties
+banned-ips.json
+banned-players.json
+ops.json
+usercache.json
+whitelist.json
+logs/
+world/
+libraries/
+versions/
+
+RaspberryJuice
+
+bukkit.yml
+commands.yml
+crash-reports/
+help.yml
+permissions.yml
+plugins/
+spigot.yml
+world_nether/
+world_the_end/
