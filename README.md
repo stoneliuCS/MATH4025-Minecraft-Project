@@ -22,75 +22,13 @@
     ```bash
     RaspberryJuice/target/raspberryjuice-1.12.1.jar
     ```
-```
-#Minecraft server properties
-#Wed Jan 14 15:21:01 EST 2026
-accepts-transfers=false
-allow-flight=false
-broadcast-console-to-ops=true
-broadcast-rcon-to-ops=true
-bug-report-link=
-debug=false
-difficulty=peaceful
-enable-code-of-conduct=false
-enable-jmx-monitoring=false
-enable-query=false
-enable-rcon=false
-enable-status=true
-enforce-secure-profile=true
-enforce-whitelist=false
-entity-broadcast-range-percentage=100
-force-gamemode=false
-function-permission-level=2
-gamemode=creative
-generate-structures=true
-generator-settings={"biome"\:"minecraft\:the_void","layers"\:[],"structures"\:{}}
-hardcore=false
-hide-online-players=false
-initial-disabled-packs=
-initial-enabled-packs=vanilla
-level-name=world
-level-seed=
-level-type=minecraft\:flat
-log-ips=true
-management-server-allowed-origins=
-management-server-enabled=false
-management-server-host=localhost
-management-server-port=0
-management-server-secret=vaKTnMoWOMTXqXJUqynx8tqERPiU2v1ViNLIQ1s1
-management-server-tls-enabled=true
-management-server-tls-keystore=
-management-server-tls-keystore-password=
-max-chained-neighbor-updates=1000000
-max-players=20
-max-tick-time=60000
-max-world-size=29999984
-motd=A Minecraft Server
-network-compression-threshold=256
-online-mode=true
-op-permission-level=4
-pause-when-empty-seconds=60
-player-idle-timeout=0
-prevent-proxy-connections=false
-query.port=25565
-rate-limit=0
-rcon.password=
-rcon.port=25575
-region-file-compression=deflate
-require-resource-pack=false
-resource-pack=
-resource-pack-id=
-resource-pack-prompt=
-resource-pack-sha1=
-server-ip=
-server-port=25565
-simulation-distance=10
-spawn-protection=16
-status-heartbeat-interval=0
-sync-chunk-writes=true
-text-filtering-config=
-text-filtering-version=0
-use-native-transport=true
-view-distance=10
-white-list=false
-```
+
+## Headless Minecraft
+1. We will be using `headlessmc` to have our agents remotely train via the command line.
+    - Check the releases page here https://github.com/headlesshq/headlessmc/releases, and download both the
+    headless-mc-launcher `jar` file and wrapper `jar` files.
+    ```bash
+    java -jar headlessmc-launcher-wrapper.jar
+    ```
+    - Afterwards, enter `login` inside your terminal to authenticate with mojang.
+
