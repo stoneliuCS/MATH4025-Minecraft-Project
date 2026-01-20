@@ -23,12 +23,42 @@
     RaspberryJuice/target/raspberryjuice-1.12.1.jar
     ```
 
-## Headless Minecraft
-1. We will be using `headlessmc` to have our agents remotely train via the command line.
-    - Check the releases page here https://github.com/headlesshq/headlessmc/releases, and download both the
-    headless-mc-launcher `jar` file and wrapper `jar` files.
-    ```bash
-    java -jar headlessmc-launcher-wrapper.jar
-    ```
-    - Afterwards, enter `login` inside your terminal to authenticate with mojang.
+## MineRL Setup
+- MineRL is a powerful reinforcement learning framework for training agents. However builds will not work unless you
+have `java` version `8` or `11` installed on your system.
+
+### MACOS
+1. First verify that you have the correct java version installed.
+```bash
+java --version
+```
+2. If you do not, please install `java 8` via `brew`
+```bash
+brew install temurin@8
+```
+3. Now ensure that you use `java 8`
+```bash
+export JAVA_HOME=$(/usr/libexec/java_home -v 1.8)
+export PATH="$JAVA_HOME/bin:$PATH"
+java --version
+```
+4. Ensure that your python version is around `3.9` or `3.10`, create a virtual environment using `python -m venv .venv`
+5. Install MineRL in the virtual environment `pip install git+https://github.com/minerllabs/minerl -v`
+6. Follow this thread to patch the `MCP` folder
+```bash
+git clone https://github.com/minerllabs/minerl.git
+sed -i .bak 's/3\.2\.1/3.3.1/' ./minerl/scripts/mcp_patch.diff
+cd minerl && python setup.py
+sed -i .bak s/'java -Xmx\$maxMem'/'java -Xmx\$maxMem -XstartOnFirstThread'/ ./minerl/MCP-Reborn/launchClient.sh
+sed -i .bak /'GLFW.glfwSetWindowIcon(this.handle, buffer);'/d ./minerl/MCP-Reborn/src/main/java/net/minecraft/client/MainWindow.java
+sed -i .bak '125,136s/^/\/\//' ./minerl/MCP-Reborn/src/main/java/net/minecraft/client/MainWindow.java
+cd minerl/MCP-Reborn && ./gradlew clean build shadowJar
+cd ../../../ && poetry add "git+https://github.com/minerllabs/minerl"
+cp -rf minerrl/minerl/MCP-Reborn/* .venv/lib/python3.10/site-packages/minerl/MCP-Reborn/
+```
+4. It is a [known issue](https://github.com/minerllabs/minerl/issues/659#issuecomment-1306635414) that running `MineRL`
+   may take extra work on macOS. Follow this thread to ensure that everything is up and running smoothly.
+
+
+
 
