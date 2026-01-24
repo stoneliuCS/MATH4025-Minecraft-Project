@@ -58,3 +58,9 @@ cp -rf minerrl/minerl/MCP-Reborn/* .venv/lib/python3.10/site-packages/minerl/MCP
 ```
 4. It is a [known issue](https://github.com/minerllabs/minerl/issues/659#issuecomment-1306635414) that running `MineRL`
    may take extra work on macOS. Follow this thread to ensure that everything is up and running smoothly.
+
+# Running
+```bash
+make run
+make interactor INTERACTIVE_PORT=6666 #defaults to 6666 but can configure it
+```

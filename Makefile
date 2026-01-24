@@ -14,7 +14,10 @@ PYTHON_VERSION := $(shell $(PYTHON_BIN) -c 'import sys; print(".".join(map(str, 
 PYTHONPATH := $(PROJECT_ROOT)
 export PYTHONPATH
 
-.PHONY: help env venv check-java check-python print-env run
+INTERACTIVE_PORT ?= 6666
+MINERL_SRC ?= $(PROJECT_ROOT)/minerl-src
+
+.PHONY: help env venv check-java check-python print-env run interactor patch-minerl
 
 help:
 	@echo "Targets:"
@@ -22,6 +25,8 @@ help:
 	@echo "  make env         Verify Java 8, Python 3.9/3.10, and .venv"
 	@echo "  make print-env   Print exports for current shell"
 	@echo "  make run         Run the main Python entrypoint"
+	@echo "  make interactor  Run MineRL interactor on port $(INTERACTIVE_PORT)"
+	@echo "  make patch-minerl  Patch/rebuild MCP-Reborn and copy into venv"
 
 venv:
 	@if [ -z "$(PYTHON_BIN)" ]; then \
@@ -73,3 +78,24 @@ print-env:
 run: env
 	@JAVA_HOME="$(JAVA_HOME_8)" PATH="$(JAVA_HOME_8)/bin:$$PATH" \
 	"$(VENV_DIR)/bin/python" "$(PROJECT_ROOT)/model/main.py"
+
+interactor: env
+	@JAVA_HOME="$(JAVA_HOME_8)" PATH="$(JAVA_HOME_8)/bin:$$PATH" \
+	"$(VENV_DIR)/bin/python" -m minerl.interactor $(INTERACTIVE_PORT)
+
+patch-minerl: env
+	@set -euo pipefail; \
+	if [ ! -d "$(MINERL_SRC)/.git" ]; then \
+		git clone https://github.com/minerllabs/minerl.git "$(MINERL_SRC)"; \
+	fi; \
+	cd "$(MINERL_SRC)"; \
+	sed -i .bak 's/3\.2\.1/3.3.1/' ./minerl/scripts/mcp_patch.diff; \
+	"$(VENV_DIR)/bin/python" setup.py; \
+	sed -i .bak s/'java -Xmx$$maxMem'/'java -Xmx$$maxMem -XstartOnFirstThread'/ ./minerl/MCP-Reborn/launchClient.sh; \
+	sed -i .bak /'GLFW.glfwSetWindowIcon(this.handle, buffer);'/d ./minerl/MCP-Reborn/src/main/java/net/minecraft/client/MainWindow.java; \
+	sed -i .bak '125,136s/^/\/\//' ./minerl/MCP-Reborn/src/main/java/net/minecraft/client/MainWindow.java; \
+	cd ./minerl/MCP-Reborn; \
+	./gradlew clean build shadowJar; \
+	PY_SITE=$$($(VENV_DIR)/bin/python -c 'import site; print(site.getsitepackages()[0])'); \
+	cp -rf "$(MINERL_SRC)/minerl/MCP-Reborn/"* "$$PY_SITE/minerl/MCP-Reborn/"; \
+	echo "Patched MCP-Reborn copied to $$PY_SITE/minerl/MCP-Reborn"
