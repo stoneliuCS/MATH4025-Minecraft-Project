@@ -15,7 +15,7 @@ PYTHONPATH := $(PROJECT_ROOT)
 export PYTHONPATH
 
 INTERACTIVE_PORT ?= 6666
-MINERL_SRC ?= $(PROJECT_ROOT)/minerl-src
+MINERL_SRC ?= $(PROJECT_ROOT)/minerl
 
 .PHONY: help env venv check-java check-python print-env run interactor patch-minerl
 
@@ -82,20 +82,3 @@ run: env
 interactor: env
 	@JAVA_HOME="$(JAVA_HOME_8)" PATH="$(JAVA_HOME_8)/bin:$$PATH" \
 	"$(VENV_DIR)/bin/python" -m minerl.interactor $(INTERACTIVE_PORT)
-
-patch-minerl: env
-	@set -euo pipefail; \
-	if [ ! -d "$(MINERL_SRC)/.git" ]; then \
-		git clone https://github.com/minerllabs/minerl.git "$(MINERL_SRC)"; \
-	fi; \
-	cd "$(MINERL_SRC)"; \
-	sed -i .bak 's/3\.2\.1/3.3.1/' ./minerl/scripts/mcp_patch.diff; \
-	"$(VENV_DIR)/bin/python" setup.py; \
-	sed -i .bak s/'java -Xmx$$maxMem'/'java -Xmx$$maxMem -XstartOnFirstThread'/ ./minerl/MCP-Reborn/launchClient.sh; \
-	sed -i .bak /'GLFW.glfwSetWindowIcon(this.handle, buffer);'/d ./minerl/MCP-Reborn/src/main/java/net/minecraft/client/MainWindow.java; \
-	sed -i .bak '125,136s/^/\/\//' ./minerl/MCP-Reborn/src/main/java/net/minecraft/client/MainWindow.java; \
-	cd ./minerl/MCP-Reborn; \
-	./gradlew clean build shadowJar; \
-	PY_SITE=$$($(VENV_DIR)/bin/python -c 'import site; print(site.getsitepackages()[0])'); \
-	cp -rf "$(MINERL_SRC)/minerl/MCP-Reborn/"* "$$PY_SITE/minerl/MCP-Reborn/"; \
-	echo "Patched MCP-Reborn copied to $$PY_SITE/minerl/MCP-Reborn"

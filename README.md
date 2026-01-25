@@ -40,9 +40,9 @@ brew install temurin@8
 ```bash
 export JAVA_HOME=$(/usr/libexec/java_home -v 1.8)
 export PATH="$JAVA_HOME/bin:$PATH"
-java --version
+java -version
 ```
-4. Ensure that your python version is around `3.9` or `3.10`, create a virtual environment using `python -m venv .venv`
+4. Ensure that your python version is `3.10`, create a virtual environment using `make venv`
 5. Install MineRL in the virtual environment `pip install git+https://github.com/minerllabs/minerl -v`
 6. Follow this thread to patch the `MCP` folder
 ```bash
@@ -54,7 +54,7 @@ sed -i .bak /'GLFW.glfwSetWindowIcon(this.handle, buffer);'/d ./minerl/MCP-Rebor
 sed -i .bak '125,136s/^/\/\//' ./minerl/MCP-Reborn/src/main/java/net/minecraft/client/MainWindow.java
 cd minerl/MCP-Reborn && ./gradlew clean build shadowJar
 cd ../../../ && poetry add "git+https://github.com/minerllabs/minerl"
-cp -rf minerrl/minerl/MCP-Reborn/* .venv/lib/python3.10/site-packages/minerl/MCP-Reborn/
+cp -rf minerl/minerl/MCP-Reborn/* .venv/lib/python3.10/site-packages/minerl/MCP-Reborn/
 ```
 4. It is a [known issue](https://github.com/minerllabs/minerl/issues/659#issuecomment-1306635414) that running `MineRL`
    may take extra work on macOS. Follow this thread to ensure that everything is up and running smoothly.
