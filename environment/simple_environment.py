@@ -26,19 +26,24 @@ class BoxedNavigationSimpleEnvironment(HumanControlEnvSpec):
 
     @override
     def create_server_world_generators(self) -> list[Handler]:
-        return [
-            handlers.DefaultWorldGenerator(force_reset=True)
-        ]
+        """
+        No world generator needed - we load a pre-built world via LoadWorldAgentStart.
+        """
+        return []
 
     @override
     def create_agent_start(self) -> list[Handler]:
-        return [
-            handlers.AgentStartPlacement(0, 128, 0, yaw=45.0),
-            handlers.GammaSetting(2.0),
-            handlers.FOVSetting(70.0),
-            handlers.FakeCursorSize(16),
-            handlers.GuiScale(1),
-        ]
+
+      import os
+      world_path = os.path.join(os.path.dirname(__file__), "worlds", "simple.zip")
+      return [
+          handlers.LoadWorldAgentStart(world_path),
+          handlers.AgentStartPlacement(0, 5, 0, yaw=45.0),
+          handlers.GammaSetting(2.0),
+          handlers.FOVSetting(70.0),
+          handlers.FakeCursorSize(16),
+          handlers.GuiScale(1),
+      ]
     
     @override
     def create_rewardables(self) -> list[TranslationHandler]:
@@ -67,12 +72,19 @@ class BoxedNavigationSimpleEnvironment(HumanControlEnvSpec):
     @override
     def create_server_decorators(self) -> list[Handler]:
         """
-        Use DrawingDecorator to build the arena at y=63 (ground level).
+        DrawingDecorator is not implemented in MCP-Reborn.
+        Blocks must be pre-placed in the world file (boxed_arena.zip).
+
+        The pre-built world should contain:
+        - Stone walls from (-1,4,-1) to (10,6,10) forming a box
+        - Smooth stone floor at y=4 from (0,4,0) to (9,4,9)
+        - Red wool at (0,4,0) - spawn marker
+        - Blue wool at (9,4,9) - goal marker
         """
         return []
 
     @override
-    def determine_success_from_rewards(self, rewards: list[int]) -> bool:
+    def determine_success_from_rewards(self, rewards: list) -> bool:
         return sum(rewards) >= self.reward_threshold
 
     @override
