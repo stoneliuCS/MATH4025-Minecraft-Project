@@ -3,6 +3,7 @@ from minerl.herobraine.env_specs.basalt_specs import HumanControlEnvSpec
 from minerl.herobraine.hero.handler import Handler
 import minerl.herobraine.hero.handlers as handlers
 from typing_extensions import override
+from minerl.herobraine.hero.mc import INVERSE_KEYMAP
 
 DOC = """
 This environment creates a very controlled, simple boxed world where the agent must navigate to find a simple cube.
@@ -26,9 +27,6 @@ class BoxedNavigationSimpleEnvironment(HumanControlEnvSpec):
 
     @override
     def create_server_world_generators(self) -> list[Handler]:
-        """
-        No world generator needed - we load a pre-built world via LoadWorldAgentStart.
-        """
         return []
 
     @override
@@ -62,6 +60,7 @@ class BoxedNavigationSimpleEnvironment(HumanControlEnvSpec):
           ])
       ]
 
+
     @override
     def create_server_quit_producers(self) -> list[Handler]:
         return [
@@ -71,16 +70,6 @@ class BoxedNavigationSimpleEnvironment(HumanControlEnvSpec):
 
     @override
     def create_server_decorators(self) -> list[Handler]:
-        """
-        DrawingDecorator is not implemented in MCP-Reborn.
-        Blocks must be pre-placed in the world file (boxed_arena.zip).
-
-        The pre-built world should contain:
-        - Stone walls from (-1,4,-1) to (10,6,10) forming a box
-        - Smooth stone floor at y=4 from (0,4,0) to (9,4,9)
-        - Red wool at (0,4,0) - spawn marker
-        - Blue wool at (9,4,9) - goal marker
-        """
         return []
 
     @override
