@@ -77,7 +77,7 @@ print-env:
 
 run: env
 	@JAVA_HOME="$(JAVA_HOME_8)" PATH="$(JAVA_HOME_8)/bin:$$PATH" \
-	"$(VENV_DIR)/bin/python" "$(PROJECT_ROOT)/model/main.py"
+	"$(VENV_DIR)/bin/python" -m model.main
 
 interactor: env
 	@JAVA_HOME="$(JAVA_HOME_8)" PATH="$(JAVA_HOME_8)/bin:$$PATH" \

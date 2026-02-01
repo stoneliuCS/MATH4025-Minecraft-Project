@@ -12,3 +12,4 @@ def create_environment(objective: str, interactive: bool | None) -> Env:
     if interactive:
         env.make_interactive(port=INTERACTIVE_PORT, realtime=True)
     return env
+
