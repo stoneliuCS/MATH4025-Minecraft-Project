@@ -3,7 +3,6 @@ from minerl.herobraine.env_specs.basalt_specs import HumanControlEnvSpec
 from minerl.herobraine.hero.handler import Handler
 import minerl.herobraine.hero.handlers as handlers
 from typing_extensions import override
-from minerl.herobraine.hero.mc import INVERSE_KEYMAP
 
 DOC = """
 This environment creates a very controlled, simple boxed world where the agent must navigate to find a simple cube.
@@ -36,7 +35,6 @@ class BoxedNavigationSimpleEnvironment(HumanControlEnvSpec):
       world_path = os.path.join(os.path.dirname(__file__), "worlds", "simple.zip")
       return [
           handlers.LoadWorldAgentStart(world_path),
-          handlers.AgentStartPlacement(0, 5, 0, yaw=45.0),
           handlers.GammaSetting(2.0),
           handlers.FOVSetting(70.0),
           handlers.FakeCursorSize(16),
@@ -45,26 +43,17 @@ class BoxedNavigationSimpleEnvironment(HumanControlEnvSpec):
     
     @override
     def create_rewardables(self) -> list[TranslationHandler]:
-        return [
-            handlers.RewardForTouchingBlockType([
-                {'type': 'blue_wool', 'behaviour': 'onceOnly', 'reward': '50'},
-            ]),
-            handlers.RewardForMissionEnd(50)
-        ]
+        return []
 
     @override
     def create_agent_handlers(self) -> list[Handler]:
-      return [
-          handlers.AgentQuitFromTouchingBlockType([
-              'blue_wool'
-          ])
-      ]
+      return []
 
 
     @override
     def create_server_quit_producers(self) -> list[Handler]:
         return [
-            handlers.ServerQuitFromTimeUp(MAX_EPISODE_STEPS * 50),  # 50ms per tick
+            handlers.ServerQuitFromTimeUp(MAX_EPISODE_STEPS * 50),
             handlers.ServerQuitWhenAnyAgentFinishes()
         ]
 
