@@ -39,6 +39,7 @@ class RestrictedActionWrapper(gym.ActionWrapper):
         self.touched_yellow = False
         self.touched_red = False
         self.yellow_zones_visited = set()
+        self.last_filtered_action = None  # Store last filtered action for debugging
 
   def reset(self, **kwargs):
         self.prev_distance = None
@@ -56,40 +57,54 @@ class RestrictedActionWrapper(gym.ActionWrapper):
         else:
             filtered[key] = np.zeros_like(value) if hasattr(value, 'shape') else 0
     
+    # Ensure all movement keys exist in filtered (initialize to 0 if missing)
+    for key in ["forward", "back", "left", "right"]:
+        if key not in filtered:
+            # Initialize based on action space if available
+            if hasattr(self, 'action_space') and key in self.action_space.spaces:
+                space = self.action_space.spaces[key]
+                if hasattr(space, 'n'):
+                    # Discrete space: default to 0
+                    filtered[key] = 0
+                else:
+                    filtered[key] = 0.0
+            else:
+                filtered[key] = 0
+    
     # Ensure exactly one movement action is active at a time
     # Priority order: forward > back > left > right
     # This prevents the agent from moving in opposite directions simultaneously
     active_actions = []
     for key in ["forward", "back", "left", "right"]:
         if key in filtered:
-            # Check if action is active (value > 0)
+            # Check if action is active (value > 0 for binary, or != 0 for discrete)
             val = filtered[key]
             # Handle both scalar and array values
             if isinstance(val, np.ndarray):
                 is_active = bool(np.any(val > 0))
             else:
+                # For discrete actions, > 0 means active (0 = off, 1+ = on)
                 is_active = bool(val > 0)
             if is_active:
                 active_actions.append(key)
     
     # If no actions are active, force one (default to forward)
     if len(active_actions) == 0:
-        # Set forward to active, matching the type of existing action values
-        if "forward" in filtered:
-            # Match the type of the existing value
-            if isinstance(filtered["forward"], np.ndarray):
-                filtered["forward"] = np.ones_like(filtered["forward"], dtype=filtered["forward"].dtype)
-            else:
-                # For scalar values, check if we need int or float
-                # Try to infer from other action values
-                sample_val = next(iter(filtered.values())) if filtered else 1
-                if isinstance(sample_val, (int, np.integer)):
+        # Set forward to active (value 1 for binary actions)
+        if isinstance(filtered["forward"], np.ndarray):
+            filtered["forward"] = np.ones_like(filtered["forward"], dtype=filtered["forward"].dtype)
+        else:
+            # For discrete actions, set to 1 (assuming 0=off, 1=on)
+            # Get the max value from action space if available to ensure valid value
+            if hasattr(self, 'action_space') and "forward" in self.action_space.spaces:
+                space = self.action_space.spaces["forward"]
+                if hasattr(space, 'n') and space.n > 1:
+                    # Discrete space with n values: use 1 (assuming 0=off, 1=on)
                     filtered["forward"] = 1
                 else:
-                    filtered["forward"] = 1.0
-        else:
-            # If forward doesn't exist, create it (default to 1 for binary actions)
-            filtered["forward"] = 1
+                    filtered["forward"] = 1
+            else:
+                filtered["forward"] = 1
         active_actions = ["forward"]
     
     # If multiple actions are active, keep only the first one (by priority)
@@ -103,6 +118,28 @@ class RestrictedActionWrapper(gym.ActionWrapper):
                     filtered[key] = np.zeros_like(filtered[key], dtype=filtered[key].dtype)
                 else:
                     filtered[key] = 0
+    
+    # Final verification: ensure exactly one action is active
+    final_active = []
+    for key in ["forward", "back", "left", "right"]:
+        if key in filtered:
+            val = filtered[key]
+            if isinstance(val, np.ndarray):
+                if np.any(val > 0):
+                    final_active.append(key)
+            else:
+                if val > 0:
+                    final_active.append(key)
+    
+    if len(final_active) == 0:
+        # This should never happen, but as a safety net, force forward
+        if isinstance(filtered["forward"], np.ndarray):
+            filtered["forward"] = np.ones_like(filtered["forward"], dtype=filtered["forward"].dtype)
+        else:
+            filtered["forward"] = 1
+    
+    # Store for debugging
+    self.last_filtered_action = filtered.copy()
     
     return filtered
 

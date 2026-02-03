@@ -208,11 +208,17 @@ def run_agent_with_q_learning(env: gym.Env, render_training: bool = False):
             obs = obs_prime
             episode_reward += reward_prime
             terminal = terminal_prime
+            
+            # Get the filtered action from wrapper if available
+            filtered_action = action_dict
+            if hasattr(env, 'last_filtered_action') and env.last_filtered_action is not None:
+                filtered_action = env.last_filtered_action
+            
             # Print per-step reward and chosen action
             print(
                 f"Episode {episode + 1}, Step {step + 1}: "
                 f"reward={reward_prime:.3f}, "
-                f"action={action_dict}, "
+                f"action={filtered_action}, "
                 f"episode_return={episode_reward:.3f}"
             )
             if render_training:
@@ -277,11 +283,16 @@ def run_agent_with_learned_policy(
             obs, reward, terminal, _ = env.step(action_dict)
             episode_reward += reward
 
+            # Get the filtered action from wrapper if available
+            filtered_action = action_dict
+            if hasattr(env, 'last_filtered_action') and env.last_filtered_action is not None:
+                filtered_action = env.last_filtered_action
+
             # Print per-step reward and chosen action
             print(
                 f"[EVAL] Episode {episode + 1}, Step {step}: "
                 f"reward={reward:.3f}, "
-                f"action={action_dict}, "
+                f"action={filtered_action}, "
                 f"episode_return={episode_reward:.3f}"
             )
 
