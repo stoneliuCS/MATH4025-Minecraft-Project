@@ -17,14 +17,15 @@ export PYTHONPATH
 INTERACTIVE_PORT ?= 6666
 MINERL_SRC ?= $(PROJECT_ROOT)/minerl
 
-.PHONY: help env venv check-java check-python print-env run interactor patch-minerl
+.PHONY: help env venv check-java check-python print-env run run-learned interactor patch-minerl
 
 help:
 	@echo "Targets:"
 	@echo "  make venv        Create .venv with Python 3.9/3.10"
 	@echo "  make env         Verify Java 8, Python 3.9/3.10, and .venv"
 	@echo "  make print-env   Print exports for current shell"
-	@echo "  make run         Run the main Python entrypoint"
+	@echo "  make run         Run the full training pipeline (train + evaluate)"
+	@echo "  make run-learned Run the learned agent from saved Q-table (no training)"
 	@echo "  make interactor  Run MineRL interactor on port $(INTERACTIVE_PORT)"
 	@echo "  make patch-minerl  Patch/rebuild MCP-Reborn and copy into venv"
 
@@ -77,7 +78,16 @@ print-env:
 
 run: env
 	@JAVA_HOME="$(JAVA_HOME_8)" PATH="$(JAVA_HOME_8)/bin:$$PATH" \
-	"$(VENV_DIR)/bin/python" -m model.main
+	"$(VENV_DIR)/bin/python" -m model.main --mode train
+
+run-learned: env
+	@if [ ! -f "$(PROJECT_ROOT)/artifacts/q_table.pkl" ]; then \
+		echo "Error: No saved Q-table found at artifacts/q_table.pkl"; \
+		echo "Run 'make run' first to train and save the Q-table."; \
+		exit 1; \
+	fi
+	@JAVA_HOME="$(JAVA_HOME_8)" PATH="$(JAVA_HOME_8)/bin:$$PATH" \
+	"$(VENV_DIR)/bin/python" -m model.main --mode run-learned
 
 interactor: env
 	@JAVA_HOME="$(JAVA_HOME_8)" PATH="$(JAVA_HOME_8)/bin:$$PATH" \
