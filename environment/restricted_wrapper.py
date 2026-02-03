@@ -18,8 +18,12 @@ class RestrictedActionWrapper(gym.ActionWrapper):
   ]
   red_zones = [(-7, -6, 193, 194)]
   blue_zones = [(0, 1, 187, 188)]
-  yellow_reward = -25.0
-  red_reward = 500
+  yellow_reward = -1.0
+  red_reward = 50000
+
+  target_x = -6.5
+  target_z = 193.5
+  distance_reward_scale = 100.0
 
   def __init__(self, env):
       super().__init__(env)
@@ -29,6 +33,13 @@ class RestrictedActionWrapper(gym.ActionWrapper):
           key: space for key, space in env.action_space.spaces.items()
           if key in self.allowed_keys
       })
+      self.prev_distance = None  # Track previous distance for reward shaping
+
+  def reset(self, **kwargs):
+      self.prev_distance = None
+      self.touched_yellow = False
+      self.touched_red = False
+      return self.env.reset(**kwargs)
 
   def action(self, action):
       # Zero out any non-movement actions
@@ -65,18 +76,22 @@ class RestrictedActionWrapper(gym.ActionWrapper):
     if 'location_stats' in obs:
         x = obs['location_stats']['xpos']
         z = obs['location_stats']['zpos']
-        print(x,z)
 
-        # Check yellow wool (penalty)
+        current_distance = np.sqrt((x - self.target_x)**2 + (z - self.target_z)**2)
+        if self.prev_distance is not None:
+            distance_delta = self.prev_distance - current_distance
+            reward += distance_delta * self.distance_reward_scale
+        self.prev_distance = current_distance
+
         if self._in_zone(x, z, self.yellow_zones):
             reward += self.yellow_reward
             self.touched_yellow = True
             info['touched_yellow_wool'] = True
 
-        # Check red wool (goal)
         if self._in_zone(x, z, self.red_zones):
             reward += self.red_reward
             self.touched_red = True
+            done = True
             info['touched_red_wool'] = True
 
     return obs, reward, done, info
