@@ -54,7 +54,7 @@ def run_simple_environment():
     print("=" * 60)
     train_env = None
     try:
-        train_env = create_environment(env_name, interactive=True)
+        train_env = create_environment(env_name, interactive=False)
         q_table = run_agent_with_q_learning(RestrictedActionWrapper(train_env), render_training=False)
         # Save learned Q-table so it can be reused later without retraining
         save_q_table(q_table, "artifacts/q_table.pkl")

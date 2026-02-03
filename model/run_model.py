@@ -208,11 +208,12 @@ def run_agent_with_q_learning(env: gym.Env, render_training: bool = False):
             obs = obs_prime
             episode_reward += reward_prime
             terminal = terminal_prime
-            # Print per-step reward and running episode return
+            # Print per-step reward and chosen action
             print(
-                f"Episode {episode + 1}, step {step + 1}, "
+                f"Episode {episode + 1}, Step {step + 1}: "
                 f"reward={reward_prime:.3f}, "
-                f"episode_return_so_far={episode_reward:.3f}"
+                f"action={action_dict}, "
+                f"episode_return={episode_reward:.3f}"
             )
             if render_training:
                 env.render()
@@ -275,6 +276,14 @@ def run_agent_with_learned_policy(
 
             obs, reward, terminal, _ = env.step(action_dict)
             episode_reward += reward
+
+            # Print per-step reward and chosen action
+            print(
+                f"[EVAL] Episode {episode + 1}, Step {step}: "
+                f"reward={reward:.3f}, "
+                f"action={action_dict}, "
+                f"episode_return={episode_reward:.3f}"
+            )
 
             if render:
                 env.render()
