@@ -2,7 +2,7 @@ import gym
 import numpy as np
 
 class RestrictedActionWrapper(gym.ActionWrapper):
-  """Only allow movement actions, zero out everything else."""
+  """Only allow movement actions with a simple 4-action discrete space."""
 
   touched_yellow = False
   touched_red = False
@@ -19,26 +19,26 @@ class RestrictedActionWrapper(gym.ActionWrapper):
   red_zones = [(-7, -6, 193, 194)]
   blue_zones = [(0, 1, 187, 188)]
   red_reward = 1000.0              # Goal reward (large but not overwhelming)
-  yellow_penalty = -100.0          # One-time penalty for entering yellow
+  yellow_penalty = -50.0          # One-time penalty for entering yellow
   distance_reward_scale = 1.0      # Small reward for progress
   step_penalty = -0.1              # Small penalty to encourage efficiency
 
 
   target_x = -6.5
   target_z = 193.5
-#   distance_reward_scale = 100.0
+
+  # Action mapping: index -> direction name
+  ACTION_NAMES = ["forward", "back", "left", "right"]
 
   def __init__(self, env):
         super().__init__(env)
-        self.allowed_keys = {"forward", "back", "left", "right"}
-        self.action_space = gym.spaces.Dict({
-            key: space for key, space in env.action_space.spaces.items()
-            if key in self.allowed_keys
-        })
+        # Simple discrete action space: 0=forward, 1=back, 2=left, 3=right
+        self.action_space = gym.spaces.Discrete(4)
         self.prev_distance = None
         self.touched_yellow = False
         self.touched_red = False
         self.yellow_zones_visited = set()
+        self.was_in_yellow = False  # Track if agent was in yellow last step
         self.last_filtered_action = None  # Store last filtered action for debugging
 
   def reset(self, **kwargs):
@@ -46,101 +46,28 @@ class RestrictedActionWrapper(gym.ActionWrapper):
         self.touched_yellow = False
         self.touched_red = False
         self.yellow_zones_visited = set()
+        self.was_in_yellow = False
         return self.env.reset(**kwargs)
 
   def action(self, action):
-    filtered = {}
-    # First, filter to only allowed keys and zero out others
-    for key, value in action.items():
-        if key in self.allowed_keys:
-            filtered[key] = value
-        else:
-            filtered[key] = np.zeros_like(value) if hasattr(value, 'shape') else 0
-    
-    # Ensure all movement keys exist in filtered (initialize to 0 if missing)
-    for key in ["forward", "back", "left", "right"]:
-        if key not in filtered:
-            # Initialize based on action space if available
-            if hasattr(self, 'action_space') and key in self.action_space.spaces:
-                space = self.action_space.spaces[key]
-                if hasattr(space, 'n'):
-                    # Discrete space: default to 0
-                    filtered[key] = 0
-                else:
-                    filtered[key] = 0.0
-            else:
-                filtered[key] = 0
-    
-    # Ensure exactly one movement action is active at a time
-    # Priority order: forward > back > left > right
-    # This prevents the agent from moving in opposite directions simultaneously
-    active_actions = []
-    for key in ["forward", "back", "left", "right"]:
-        if key in filtered:
-            # Check if action is active (value > 0 for binary, or != 0 for discrete)
-            val = filtered[key]
-            # Handle both scalar and array values
-            if isinstance(val, np.ndarray):
-                is_active = bool(np.any(val > 0))
-            else:
-                # For discrete actions, > 0 means active (0 = off, 1+ = on)
-                is_active = bool(val > 0)
-            if is_active:
-                active_actions.append(key)
-    
-    # If no actions are active, force one (default to forward)
-    if len(active_actions) == 0:
-        # Set forward to active (value 1 for binary actions)
-        if isinstance(filtered["forward"], np.ndarray):
-            filtered["forward"] = np.ones_like(filtered["forward"], dtype=filtered["forward"].dtype)
-        else:
-            # For discrete actions, set to 1 (assuming 0=off, 1=on)
-            # Get the max value from action space if available to ensure valid value
-            if hasattr(self, 'action_space') and "forward" in self.action_space.spaces:
-                space = self.action_space.spaces["forward"]
-                if hasattr(space, 'n') and space.n > 1:
-                    # Discrete space with n values: use 1 (assuming 0=off, 1=on)
-                    filtered["forward"] = 1
-                else:
-                    filtered["forward"] = 1
-            else:
-                filtered["forward"] = 1
-        active_actions = ["forward"]
-    
-    # If multiple actions are active, keep only the first one (by priority)
-    if len(active_actions) > 1:
-        # Keep the first active action (highest priority: forward > back > left > right)
-        keep_action = active_actions[0]
-        for key in ["forward", "back", "left", "right"]:
-            if key in filtered and key != keep_action:
-                # Zero out all other movement actions
-                if isinstance(filtered[key], np.ndarray):
-                    filtered[key] = np.zeros_like(filtered[key], dtype=filtered[key].dtype)
-                else:
-                    filtered[key] = 0
-    
-    # Final verification: ensure exactly one action is active
-    final_active = []
-    for key in ["forward", "back", "left", "right"]:
-        if key in filtered:
-            val = filtered[key]
-            if isinstance(val, np.ndarray):
-                if np.any(val > 0):
-                    final_active.append(key)
-            else:
-                if val > 0:
-                    final_active.append(key)
-    
-    if len(final_active) == 0:
-        # This should never happen, but as a safety net, force forward
-        if isinstance(filtered["forward"], np.ndarray):
-            filtered["forward"] = np.ones_like(filtered["forward"], dtype=filtered["forward"].dtype)
-        else:
-            filtered["forward"] = 1
-    
+    """Convert discrete action index to dict for underlying environment.
+
+    Action mapping:
+      0 = forward
+      1 = back
+      2 = left
+      3 = right
+    """
+    # Build dict with all movement keys set to 0
+    filtered = {"forward": 0, "back": 0, "left": 0, "right": 0}
+
+    # Set the selected action to 1
+    action_name = self.ACTION_NAMES[action]
+    filtered[action_name] = 1
+
     # Store for debugging
-    self.last_filtered_action = filtered.copy()
-    
+    self.last_filtered_action = action_name
+
     return filtered
 
   def _in_zone(self, x, z, zones):
@@ -152,7 +79,9 @@ class RestrictedActionWrapper(gym.ActionWrapper):
     return -1
 
   def step(self, action):
-    obs, reward, done, info = self.env.step(action)
+    # Convert discrete action index to dict before passing to underlying env
+    converted_action = self.action(action)
+    obs, reward, done, info = self.env.step(converted_action)
     
     # Start with small step penalty to encourage efficiency
     reward = self.step_penalty
@@ -170,13 +99,17 @@ class RestrictedActionWrapper(gym.ActionWrapper):
         
         self.prev_distance = current_distance
         
-        # 2. Check for yellow zone (one-time penalty per zone)
+        # 2. Check for yellow zone - penalize only on ENTRY (transition from outside to inside)
         yellow_idx = self._in_zone(x, z, self.yellow_zones)
-        if yellow_idx >= 0 and yellow_idx not in self.yellow_zones_visited:
+        in_yellow_now = yellow_idx >= 0
+
+        if in_yellow_now and not self.was_in_yellow:
             reward += self.yellow_penalty
             self.yellow_zones_visited.add(yellow_idx)
             self.touched_yellow = True
             info['touched_yellow_wool'] = True
+
+        self.was_in_yellow = in_yellow_now
         
         # 3. Check for red zone (goal)
         if self._in_zone(x, z, self.red_zones) >= 0:

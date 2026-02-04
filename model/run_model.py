@@ -1,6 +1,5 @@
 import gym
 import numpy as np
-import math
 import pickle
 from pathlib import Path
 
@@ -62,10 +61,8 @@ def evaluate_random_policy(
 
         while not done and step < NUMBER_OF_STEPS:
             step += 1
+            # Sample from discrete action space (0-3)
             action = env.action_space.sample()
-            # Avoid terminating via ESC if present
-            if isinstance(action, dict) and "ESC" in action:
-                action["ESC"] = 0
             obs, reward, done, _ = env.step(action)
             episode_reward += reward
             if render:
@@ -82,32 +79,15 @@ def evaluate_random_policy(
 
 
 def run_agent_with_q_learning(env: gym.Env, render_training: bool = False):
-    no_valid_actions = math.prod(space.n for space in env.action_space.spaces.values())
+    # Simple 4-action discrete space: 0=forward, 1=back, 2=left, 3=right
+    no_valid_actions = env.action_space.n  # Should be 4
     current_epsilon = INITIAL_EPSILON
     gamma = GAMMA
     Q_table: dict[int, list[float]] = {}
     Q_update_table: dict[int, list[int]] = {}
 
-    # Build mapping between action indices and dict actions
-    action_keys = list(env.action_space.spaces.keys())
-    action_dims = [env.action_space.spaces[k].n for k in action_keys]
-
-    def action_index_to_dict(index: int) -> dict:
-        """Convert an integer action index to a dict action for env.step()."""
-        action_dict = {}
-        for i, key in enumerate(action_keys):
-            action_dict[key] = index % action_dims[i]
-            index //= action_dims[i]
-        return action_dict
-
-    def action_dict_to_index(action_dict: dict) -> int:
-        """Convert a dict action to an integer index for Q-table."""
-        index = 0
-        multiplier = 1
-        for i, key in enumerate(action_keys):
-            index += action_dict[key] * multiplier
-            multiplier *= action_dims[i]
-        return index
+    # Action names for debugging
+    ACTION_NAMES = ["forward", "back", "left", "right"]
 
     def discretize_obs(obs) -> int:
         """
@@ -123,19 +103,18 @@ def run_agent_with_q_learning(env: gym.Env, render_training: bool = False):
         return (x * 1000 + y) * 1000 + z
 
     def epsilon_greedy_policy(
-        hashed_state, current_epsilon, Q_table: dict[int, list[float]], env : gym.Env
+        hashed_state, current_epsilon, Q_table: dict[int, list[float]], env: gym.Env
     ) -> int:
         """
         From the given hashed state, returns an action INDEX based off the epsilon greedy policy.
+        Actions: 0=forward, 1=back, 2=left, 3=right
         """
         rand = np.random.rand()
         if rand <= current_epsilon:
-            sample_action = env.action_space.sample()
-            # Avoid accidentally terminating the episode with ESC when exploring
-            if "ESC" in sample_action:
-                sample_action["ESC"] = 0
-            return action_dict_to_index(sample_action)
+            # Random exploration: sample from discrete action space
+            return env.action_space.sample()
         else:
+            # Greedy exploitation: pick action with highest Q-value
             argmax_action = max(
                 range(no_valid_actions),
                 key=lambda action: Q_table.setdefault(
@@ -188,11 +167,13 @@ def run_agent_with_q_learning(env: gym.Env, render_training: bool = False):
         episode_reward = 0.0
         for step in range(NUMBER_OF_STEPS):
             if terminal:
+                print("Reached a terminal state!")
                 break
             hashed_current_state = discretize_obs(obs)
             action_index = epsilon_greedy_policy(hashed_current_state, current_epsilon, Q_table, env)
-            action_dict = action_index_to_dict(action_index)
-            obs_prime, reward_prime, terminal_prime, _ = env.step(action_dict)
+
+            # Pass action index directly - wrapper converts to dict
+            obs_prime, reward_prime, terminal_prime, _ = env.step(action_index)
             hashed_state_prime = discretize_obs(obs_prime)
             q_new_opt_val = q_new_opt(
                             hashed_current_state,
@@ -208,17 +189,12 @@ def run_agent_with_q_learning(env: gym.Env, render_training: bool = False):
             obs = obs_prime
             episode_reward += reward_prime
             terminal = terminal_prime
-            
-            # Get the filtered action from wrapper if available
-            filtered_action = action_dict
-            if hasattr(env, 'last_filtered_action') and env.last_filtered_action is not None:
-                filtered_action = env.last_filtered_action
-            
+
             # Print per-step reward and chosen action
             print(
                 f"Episode {episode + 1}, Step {step + 1}: "
                 f"reward={reward_prime:.3f}, "
-                f"action={filtered_action}, "
+                f"action={ACTION_NAMES[action_index]}, "
                 f"episode_return={episode_reward:.3f}"
             )
             if render_training:
@@ -242,16 +218,9 @@ def run_agent_with_learned_policy(
     This does not update Q-values; it only exploits what was learned.
     Returns a list of episode returns.
     """
-    # Rebuild action mapping for this environment
-    action_keys = list(env.action_space.spaces.keys())
-    action_dims = [env.action_space.spaces[k].n for k in action_keys]
-
-    def action_index_to_dict(index: int) -> dict:
-        action_dict = {}
-        for i, key in enumerate(action_keys):
-            action_dict[key] = index % action_dims[i]
-            index //= action_dims[i]
-        return action_dict
+    # Simple 4-action discrete space: 0=forward, 1=back, 2=left, 3=right
+    no_valid_actions = env.action_space.n  # Should be 4
+    ACTION_NAMES = ["forward", "back", "left", "right"]
 
     def discretize_obs(obs) -> int:
         loc = obs["location_stats"]
@@ -259,8 +228,6 @@ def run_agent_with_learned_policy(
         y = int(loc["ypos"])
         z = int(loc["zpos"])
         return (x * 1000 + y) * 1000 + z
-
-    no_valid_actions = math.prod(space.n for space in env.action_space.spaces.values())
 
     episode_returns: list[float] = []
 
@@ -278,21 +245,16 @@ def run_agent_with_learned_policy(
                 state, np.array([0.0] * no_valid_actions, dtype=float)
             )
             action_index = int(np.argmax(q_values))
-            action_dict = action_index_to_dict(action_index)
 
-            obs, reward, terminal, _ = env.step(action_dict)
+            # Pass action index directly - wrapper converts to dict
+            obs, reward, terminal, _ = env.step(action_index)
             episode_reward += reward
-
-            # Get the filtered action from wrapper if available
-            filtered_action = action_dict
-            if hasattr(env, 'last_filtered_action') and env.last_filtered_action is not None:
-                filtered_action = env.last_filtered_action
 
             # Print per-step reward and chosen action
             print(
                 f"[EVAL] Episode {episode + 1}, Step {step}: "
                 f"reward={reward:.3f}, "
-                f"action={filtered_action}, "
+                f"action={ACTION_NAMES[action_index]}, "
                 f"episode_return={episode_reward:.3f}"
             )
 
