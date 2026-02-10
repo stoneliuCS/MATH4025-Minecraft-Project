@@ -193,7 +193,7 @@ def run_dqn_eval():
         eval_env = create_environment(env_name, interactive=True)
         print("Waiting for Minecraft client to connect...")
         time.sleep(5)
-        dqn_train.evaluate_dqn(RestrictedActionWrapper(eval_env))
+        dqn_train.evaluate_dqn(RestrictedActionWrapper(eval_env), render=True)
     finally:
         if eval_env is not None:
             eval_env.close()

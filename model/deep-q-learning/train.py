@@ -175,7 +175,7 @@ def train_dqn(env):
 # ---------------------------------------------------------------------------
 # Evaluation
 # ---------------------------------------------------------------------------
-def evaluate_dqn(env, model_path=CHECKPOINT_PATH, episodes=5):
+def evaluate_dqn(env, model_path=CHECKPOINT_PATH, episodes=5, render=False):
     """Load a saved DQN model and run a greedy policy."""
     env = GrayscaleWrapper(env)
     env = FrameStackWrapper(env, N_FRAMES)
@@ -194,6 +194,8 @@ def evaluate_dqn(env, model_path=CHECKPOINT_PATH, episodes=5):
         step = 0
 
         while not done and step < MAX_STEPS_PER_EPISODE:
+            if render:
+                env.render()
             with torch.no_grad():
                 t = torch.from_numpy(state.astype(np.float32) / 255.0).unsqueeze(0).to(device)
                 action = model(t).argmax(dim=1).item()
