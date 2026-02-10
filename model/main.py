@@ -1,5 +1,7 @@
 import logging
 import argparse
+import importlib.util
+import os
 import time
 from minerl import *
 
@@ -16,6 +18,15 @@ from .run_model import (
 from environment.simple_environment import BoxedNavigationSimpleEnvironment
 
 logging.basicConfig(level=logging.DEBUG)
+
+
+def _load_dqn_train():
+    """Import model/deep-q-learning/train.py (hyphenated dir needs importlib)."""
+    path = os.path.join(os.path.dirname(__file__), "deep-q-learning", "train.py")
+    spec = importlib.util.spec_from_file_location("dqn_train", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
 
 
 def run():
@@ -134,7 +145,7 @@ def run_learned_agent_only():
         print("Waiting for Minecraft client to connect (this may take 10-30 seconds)...")
         time.sleep(5)  # Give client time to start and connect
         print("Environment ready!")
-        
+
         run_agent_with_learned_policy(
             RestrictedActionWrapper(eval_env),
             q_table,
@@ -146,13 +157,55 @@ def run_learned_agent_only():
             eval_env.close()
 
 
+def run_dqn_training():
+    """Train a DQN agent using CNN on POV camera frames."""
+    env_name = "BoxedNavigation-v0"
+    abs_box_env = BoxedNavigationSimpleEnvironment()
+    abs_box_env.register()
+
+    dqn_train = _load_dqn_train()
+
+    print("=" * 60)
+    print("Training DQN agent (headless mode)...")
+    print("=" * 60)
+    train_env = None
+    try:
+        train_env = create_environment(env_name, interactive=False)
+        dqn_train.train_dqn(RestrictedActionWrapper(train_env))
+    finally:
+        if train_env is not None:
+            train_env.close()
+
+
+def run_dqn_eval():
+    """Evaluate a trained DQN agent with GUI."""
+    env_name = "BoxedNavigation-v0"
+    abs_box_env = BoxedNavigationSimpleEnvironment()
+    abs_box_env.register()
+
+    dqn_train = _load_dqn_train()
+
+    print("=" * 60)
+    print("Evaluating DQN agent (with GUI)...")
+    print("=" * 60)
+    eval_env = None
+    try:
+        eval_env = create_environment(env_name, interactive=True)
+        print("Waiting for Minecraft client to connect...")
+        time.sleep(5)
+        dqn_train.evaluate_dqn(RestrictedActionWrapper(eval_env))
+    finally:
+        if eval_env is not None:
+            eval_env.close()
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run Q-learning agent training or evaluation")
     parser.add_argument(
         "--mode",
-        choices=["train", "run-learned"],
+        choices=["train", "run-learned", "dqn", "dqn-eval"],
         default="train",
-        help="Mode: 'train' runs full training pipeline, 'run-learned' loads and runs saved Q-table",
+        help="Mode: 'train' tabular Q-learning, 'run-learned' load Q-table, 'dqn' train DQN, 'dqn-eval' evaluate DQN",
     )
     args = parser.parse_args()
 
@@ -160,3 +213,7 @@ if __name__ == "__main__":
         run_simple_environment()
     elif args.mode == "run-learned":
         run_learned_agent_only()
+    elif args.mode == "dqn":
+        run_dqn_training()
+    elif args.mode == "dqn-eval":
+        run_dqn_eval()

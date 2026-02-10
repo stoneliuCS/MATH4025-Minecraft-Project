@@ -17,7 +17,7 @@ export PYTHONPATH
 INTERACTIVE_PORT ?= 6666
 MINERL_SRC ?= $(PROJECT_ROOT)/minerl
 
-.PHONY: help env venv check-java check-python print-env run run-learned interactor patch-minerl
+.PHONY: help env venv check-java check-python print-env run run-learned dqn dqn-eval interactor patch-minerl
 
 help:
 	@echo "Targets:"
@@ -26,6 +26,8 @@ help:
 	@echo "  make print-env   Print exports for current shell"
 	@echo "  make run         Run the full training pipeline (train + evaluate)"
 	@echo "  make run-learned Run the learned agent from saved Q-table (no training)"
+	@echo "  make dqn         Train the DQN agent on POV camera frames"
+	@echo "  make dqn-eval    Evaluate trained DQN agent with GUI"
 	@echo "  make interactor  Run MineRL interactor on port $(INTERACTIVE_PORT)"
 	@echo "  make patch-minerl  Patch/rebuild MCP-Reborn and copy into venv"
 
@@ -88,6 +90,19 @@ run-learned: env
 	fi
 	@JAVA_HOME="$(JAVA_HOME_8)" PATH="$(JAVA_HOME_8)/bin:$$PATH" \
 	"$(VENV_DIR)/bin/python" -m model.main --mode run-learned
+
+dqn: env
+	@JAVA_HOME="$(JAVA_HOME_8)" PATH="$(JAVA_HOME_8)/bin:$$PATH" \
+	"$(VENV_DIR)/bin/python" -m model.main --mode dqn
+
+dqn-eval: env
+	@if [ ! -f "$(PROJECT_ROOT)/artifacts/dqn_model.pt" ]; then \
+		echo "Error: No saved DQN model found at artifacts/dqn_model.pt"; \
+		echo "Run 'make dqn' first to train the DQN agent."; \
+		exit 1; \
+	fi
+	@JAVA_HOME="$(JAVA_HOME_8)" PATH="$(JAVA_HOME_8)/bin:$$PATH" \
+	"$(VENV_DIR)/bin/python" -m model.main --mode dqn-eval
 
 interactor: env
 	@JAVA_HOME="$(JAVA_HOME_8)" PATH="$(JAVA_HOME_8)/bin:$$PATH" \
