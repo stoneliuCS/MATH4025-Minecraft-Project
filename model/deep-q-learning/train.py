@@ -61,13 +61,16 @@ class DQNAgent:
         frac = min(1.0, self.total_steps / EPSILON_DECAY_STEPS)
         return EPSILON_START + frac * (EPSILON_END - EPSILON_START)
 
-    # -- action selection ---------------------------------------------------
     def select_action(self, state):
+        # select an action 
+        # the Q network is being inferenced in this state
         if random.random() < self.epsilon:
             return random.randrange(self.n_actions)
         with torch.no_grad():
-            t = torch.from_numpy(state.astype(np.float32) / 255.0).unsqueeze(0).to(self.device)
-            return self.policy_net(t).argmax(dim=1).item()
+            # normalize the state, reshape it so that it will have a batch dimension, and then move it on to the GPU
+            state = torch.from_numpy(state.astype(np.float32) / 255.0).unsqueeze(0).to(self.device)
+            # inference the policy network on the state 
+            return self.policy_net(state).argmax(dim=1).item()
 
     # -- one gradient step --------------------------------------------------
     def optimize(self, batch):
@@ -111,12 +114,16 @@ def train_dqn(env):
     env = GrayscaleWrapper(env)
     env = FrameStackWrapper(env, N_FRAMES)
 
+    # connect to GPU 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger.info(f"Using device: {device}")
 
+    # create agent
     agent = DQNAgent(n_actions=4, device=device)
+    # create buffer to store recent states 
     buffer = ReplayBuffer(REPLAY_BUFFER_SIZE, frame_shape=(N_FRAMES, 64, 64))
 
+    # make sure that the directory where we want to store the checkpoint file exists
     os.makedirs(os.path.dirname(CHECKPOINT_PATH), exist_ok=True)
 
     all_rewards = []
@@ -128,9 +135,12 @@ def train_dqn(env):
         loss_count = 0
 
         for step in range(MAX_STEPS_PER_EPISODE):
-            action = agent.select_action(state)
-            next_state, reward, done, info = env.step(action)
 
+            # inference the Q neural network to select an action
+            action = agent.select_action(state)
+            # take the action in the environment, get the next state and the reward
+            next_state, reward, done, info = env.step(action)
+            # add the information for this step to the state buffer
             buffer.push(state, action, reward, next_state, done)
             state = next_state
             episode_reward += reward
@@ -149,7 +159,8 @@ def train_dqn(env):
 
             if done:
                 break
-
+        
+        # give the information for this episode
         avg_loss = episode_loss / loss_count if loss_count > 0 else 0.0
         all_rewards.append(episode_reward)
         logger.info(
@@ -165,7 +176,7 @@ def train_dqn(env):
             torch.save(agent.policy_net.state_dict(), CHECKPOINT_PATH)
             logger.info(f"  -> Checkpoint saved to {CHECKPOINT_PATH}")
 
-    # Final save
+    # save a checkpoint for the current model weights
     torch.save(agent.policy_net.state_dict(), CHECKPOINT_PATH)
     logger.info(f"Training complete. Final model saved to {CHECKPOINT_PATH}")
     env.close()
