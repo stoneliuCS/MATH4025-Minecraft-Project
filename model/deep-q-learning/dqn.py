@@ -12,11 +12,17 @@ class DQN(nn.Module):
             nn.ReLU(),
             nn.Conv2d(32, 64, kernel_size=4, stride=2),        # -> 6x6x64
             nn.ReLU(),
-            nn.Conv2d(64, 64, kernel_size=3, stride=1),        # -> 4x4x64
+            nn.Conv2d(64, 64, kernel_size=4, stride=2),        # -> 4x4x64
             nn.ReLU(),
         )
         self.fc = nn.Sequential(
-            nn.Linear(64 * 4 * 4, 512),
+            nn.Linear(256, 512),
+            nn.ReLU(),
+            nn.Linear(512, 512),
+            nn.ReLU(),
+            nn.Linear(512, 512),
+            nn.ReLU(),
+            nn.Linear(512, 512),
             nn.ReLU(),
             nn.Linear(512, n_actions),
         )

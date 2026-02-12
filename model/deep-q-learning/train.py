@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Hyperparameters
 # ---------------------------------------------------------------------------
+N_ACTIONS = 10
 LEARNING_RATE = 1e-4
 BATCH_SIZE = 32
 REPLAY_BUFFER_SIZE = 100_000
@@ -28,11 +29,11 @@ TARGET_UPDATE_FREQ = 1_000    # steps
 GAMMA = 0.99
 EPSILON_START = 1.0
 EPSILON_END = 0.05
-EPSILON_DECAY_STEPS = 50_000
-WARMUP_STEPS = 10_000
-N_FRAMES = 4
+EPSILON_DECAY_STEPS = 1000
+WARMUP_STEPS = 10
+N_FRAMES = 6
 N_EPISODES = 200
-MAX_STEPS_PER_EPISODE = 2_000
+MAX_STEPS_PER_EPISODE = 1000
 CHECKPOINT_FREQ = 10          # episodes
 CHECKPOINT_PATH = "artifacts/dqn_model.pt"
 
@@ -41,12 +42,12 @@ CHECKPOINT_PATH = "artifacts/dqn_model.pt"
 # Agent
 # ---------------------------------------------------------------------------
 class DQNAgent:
-    def __init__(self, n_actions, device):
-        self.n_actions = n_actions
+    def __init__(self, device):
+        self.n_actions = N_ACTIONS
         self.device = device
 
-        self.policy_net = DQN(N_FRAMES, n_actions).to(device)
-        self.target_net = DQN(N_FRAMES, n_actions).to(device)
+        self.policy_net = DQN(N_FRAMES, N_ACTIONS).to(device)
+        self.target_net = DQN(N_FRAMES, N_ACTIONS).to(device)
         self.update_target()
         self.target_net.eval()
 
@@ -69,6 +70,7 @@ class DQNAgent:
         with torch.no_grad():
             # normalize the state, reshape it so that it will have a batch dimension, and then move it on to the GPU
             state = torch.from_numpy(state.astype(np.float32) / 255.0).unsqueeze(0).to(self.device)
+            logger.debug(f"shape of state tensor: {state.shape}")
             # inference the policy network on the state 
             return self.policy_net(state).argmax(dim=1).item()
 
@@ -119,7 +121,7 @@ def train_dqn(env):
     logger.info(f"Using device: {device}")
 
     # create agent
-    agent = DQNAgent(n_actions=4, device=device)
+    agent = DQNAgent(device=device)
     # create buffer to store recent states 
     buffer = ReplayBuffer(REPLAY_BUFFER_SIZE, frame_shape=(N_FRAMES, 64, 64))
 
@@ -135,7 +137,9 @@ def train_dqn(env):
         loss_count = 0
 
         for step in range(MAX_STEPS_PER_EPISODE):
+            env.render()
 
+            
             # inference the Q neural network to select an action
             action = agent.select_action(state)
             # take the action in the environment, get the next state and the reward
@@ -148,6 +152,7 @@ def train_dqn(env):
 
             # Train after warmup
             if agent.total_steps >= WARMUP_STEPS and len(buffer) >= BATCH_SIZE:
+                logger.info(f"doing optimization process...")
                 batch = buffer.sample(BATCH_SIZE)
                 loss = agent.optimize(batch)
                 episode_loss += loss
@@ -159,7 +164,11 @@ def train_dqn(env):
 
             if done:
                 break
-        
+            
+            x = info['xpos']
+            z = info['zpos']
+            logger.info(f"agent.total_steps: {agent.total_steps}, action: {action}, x: {x}, z: {z}, reward: {reward}")
+
         # give the information for this episode
         avg_loss = episode_loss / loss_count if loss_count > 0 else 0.0
         all_rewards.append(episode_reward)
