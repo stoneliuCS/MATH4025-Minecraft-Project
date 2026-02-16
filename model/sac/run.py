@@ -57,7 +57,7 @@ def run(render: bool = False):
         name_prefix="sac_wood",
     )
 
-    model.learn(
+    model = model.learn(
         total_timesteps=TOTAL_TIMESTEPS,
         callback=checkpoint_cb,
         log_interval=10,

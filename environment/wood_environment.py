@@ -1,7 +1,10 @@
+import logging
 import gym
 import numpy as np
 import cv2
 import gym.spaces
+
+logger = logging.getLogger(__name__)
 from minerl.herobraine.env_spec import TranslationHandler
 from minerl.herobraine.env_specs.basalt_specs import HumanControlEnvSpec
 from minerl.herobraine.hero.handler import Handler
@@ -72,6 +75,9 @@ class LogRewardWrapper(gym.Wrapper):  # pyright: ignore[reportPrivateImportUsage
         log_diff = cur_logs - self._prev_logs
         if log_diff > 0:
             reward += log_diff * self.reward_per_log
+            logger.info(f"Collected wood! logs: {cur_logs} (+{log_diff}) reward: {reward}")
+            with open("artifacts/reward_log.txt", "a") as f:
+                f.write(f"logs: {cur_logs} (+{log_diff}) reward: {reward}\n")
         self._prev_logs = cur_logs
         return obs, reward, done, info
 
