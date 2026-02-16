@@ -122,13 +122,18 @@ class WoodDetectionRewardWrapper(gym.Wrapper):  # pyright: ignore[reportPrivateI
     """Reward shaping: small bonus for looking at / mining wood blocks.
 
     Analyzes the center of the raw POV image for wood-brown pixels using
-    HSV color thresholds.
+    HSV color thresholds.  Requires green (leaf) pixels in a wider area
+    to confirm a tree is present and avoid rewarding dirt mining.
     """
 
     WOOD_HSV_LOW = np.array([8, 90, 40])
     WOOD_HSV_HIGH = np.array([35, 200, 180])
+    LEAF_HSV_LOW = np.array([35, 40, 30])
+    LEAF_HSV_HIGH = np.array([90, 255, 200])
     CENTER_SIZE = 32
-    WOOD_THRESHOLD = 0.15 
+    CONTEXT_SIZE = 96  # wider patch to check for nearby leaves
+    WOOD_THRESHOLD = 0.15  # 15% of center pixels must be wood-colored
+    LEAF_THRESHOLD = 0.05  # 5% of context pixels must be green (leaves)
     LOOK_REWARD = 0.01
     MINE_REWARD = 0.05
     APPROACH_REWARD = 0.02
@@ -147,23 +152,38 @@ class WoodDetectionRewardWrapper(gym.Wrapper):  # pyright: ignore[reportPrivateI
         if pov is not None:
             h, w = pov.shape[:2]
             cy, cx = h // 2, w // 2
+
+            # Check for green (leaves) in a wider context patch
+            ctx_half = self.CONTEXT_SIZE // 2
+            y0 = max(cy - ctx_half, 0)
+            y1 = min(cy + ctx_half, h)
+            x0 = max(cx - ctx_half, 0)
+            x1 = min(cx + ctx_half, w)
+            context = pov[y0:y1, x0:x1]
+            ctx_hsv = cv2.cvtColor(context, cv2.COLOR_RGB2HSV)
+            leaf_mask = cv2.inRange(ctx_hsv, self.LEAF_HSV_LOW, self.LEAF_HSV_HIGH)
+            leaf_ratio = np.count_nonzero(leaf_mask) / leaf_mask.size
+            has_leaves = leaf_ratio > self.LEAF_THRESHOLD
+
+            # Check for wood-brown in the center patch
             half = self.CENTER_SIZE // 2
             center = pov[cy - half:cy + half, cx - half:cx + half]
             hsv = cv2.cvtColor(center, cv2.COLOR_RGB2HSV)
             mask = cv2.inRange(hsv, self.WOOD_HSV_LOW, self.WOOD_HSV_HIGH)
             wood_ratio = np.count_nonzero(mask) / mask.size
-            if wood_ratio > self.WOOD_THRESHOLD:
+
+            if has_leaves and wood_ratio > self.WOOD_THRESHOLD:
                 attacking = (isinstance(action, dict) and action.get("attack", 0) == 1)
                 if attacking:
                     reward += self.MINE_REWARD
-                    logger.info(f"mining wood (ratio={wood_ratio:.2f}) +{self.MINE_REWARD}")
+                    logger.info(f"mining wood (wood={wood_ratio:.2f}, leaf={leaf_ratio:.2f}) +{self.MINE_REWARD}")
                 else:
                     reward += self.LOOK_REWARD
-                    logger.info(f"looking at wood (ratio={wood_ratio:.2f}) +{self.LOOK_REWARD}")
-            # Reward approaching: wood getting bigger in the frame
-            if wood_ratio > self._prev_wood_ratio and wood_ratio > 0.05:
+                    logger.info(f"looking at wood (wood={wood_ratio:.2f}, leaf={leaf_ratio:.2f}) +{self.LOOK_REWARD}")
+            # Reward approaching: wood getting bigger in the frame (only near trees)
+            if has_leaves and wood_ratio > self._prev_wood_ratio and wood_ratio > 0.05:
                 reward += self.APPROACH_REWARD
-                logger.info(f"approaching wood (ratio={wood_ratio:.2f}, prev={self._prev_wood_ratio:.2f}) +{self.APPROACH_REWARD}")
+                logger.info(f"approaching wood (wood={wood_ratio:.2f}, prev={self._prev_wood_ratio:.2f}, leaf={leaf_ratio:.2f}) +{self.APPROACH_REWARD}")
             self._prev_wood_ratio = wood_ratio
         return obs, reward, done, info
 
@@ -230,7 +250,11 @@ class GatherWoodEnvironment(HumanControlEnvSpec):
 
     @override
     def create_agent_start(self) -> list[Handler]:
+
+      import os
+      world_path = os.path.join(os.path.dirname(__file__), "worlds", "getwood.zip")
       return [
+          handlers.LoadWorldAgentStart(world_path),
           handlers.GammaSetting(2.0),
           handlers.FOVSetting(70.0),
           handlers.FakeCursorSize(16),
