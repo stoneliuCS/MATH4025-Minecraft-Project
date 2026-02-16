@@ -118,6 +118,56 @@ class StickyAttackWrapper(gym.Wrapper):  # pyright: ignore[reportPrivateImportUs
         return self.env.reset(**kwargs)
 
 
+class WoodDetectionRewardWrapper(gym.Wrapper):  # pyright: ignore[reportPrivateImportUsage]
+    """Reward shaping: small bonus for looking at / mining wood blocks.
+
+    Analyzes the center of the raw POV image for wood-brown pixels using
+    HSV color thresholds.
+    """
+
+    WOOD_HSV_LOW = np.array([8, 90, 40])
+    WOOD_HSV_HIGH = np.array([35, 200, 180])
+    CENTER_SIZE = 32
+    WOOD_THRESHOLD = 0.15 
+    LOOK_REWARD = 0.01
+    MINE_REWARD = 0.05
+    APPROACH_REWARD = 0.02
+
+    def __init__(self, env):
+        super().__init__(env)
+        self._prev_wood_ratio = 0.0
+
+    def reset(self, **kwargs):
+        self._prev_wood_ratio = 0.0
+        return self.env.reset(**kwargs)
+
+    def step(self, action):
+        obs, reward, done, info = self.env.step(action)
+        pov = obs["pov"] if isinstance(obs, dict) else None
+        if pov is not None:
+            h, w = pov.shape[:2]
+            cy, cx = h // 2, w // 2
+            half = self.CENTER_SIZE // 2
+            center = pov[cy - half:cy + half, cx - half:cx + half]
+            hsv = cv2.cvtColor(center, cv2.COLOR_RGB2HSV)
+            mask = cv2.inRange(hsv, self.WOOD_HSV_LOW, self.WOOD_HSV_HIGH)
+            wood_ratio = np.count_nonzero(mask) / mask.size
+            if wood_ratio > self.WOOD_THRESHOLD:
+                attacking = (isinstance(action, dict) and action.get("attack", 0) == 1)
+                if attacking:
+                    reward += self.MINE_REWARD
+                    logger.info(f"mining wood (ratio={wood_ratio:.2f}) +{self.MINE_REWARD}")
+                else:
+                    reward += self.LOOK_REWARD
+                    logger.info(f"looking at wood (ratio={wood_ratio:.2f}) +{self.LOOK_REWARD}")
+            # Reward approaching: wood getting bigger in the frame
+            if wood_ratio > self._prev_wood_ratio and wood_ratio > 0.05:
+                reward += self.APPROACH_REWARD
+                logger.info(f"approaching wood (ratio={wood_ratio:.2f}, prev={self._prev_wood_ratio:.2f}) +{self.APPROACH_REWARD}")
+            self._prev_wood_ratio = wood_ratio
+        return obs, reward, done, info
+
+
 class RenderWrapper(gym.Wrapper):  # pyright: ignore[reportPrivateImportUsage]
     """Calls env.render() every step so the Minecraft GUI stays updated."""
 

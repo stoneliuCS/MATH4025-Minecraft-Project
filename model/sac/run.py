@@ -8,6 +8,7 @@ from environment.wood_environment import (
     GatherWoodEnvironment,
     LogRewardWrapper,
     StickyAttackWrapper,
+    WoodDetectionRewardWrapper,
     PovImageWrapper,
     RenderWrapper,
     ActionWrapper,
@@ -27,9 +28,10 @@ def run(render: bool = False):
     wood_env.register()
     env = create_environment(env_name, interactive=True)
 
-    # Wrapper stack: raw env -> reward -> sticky attack -> render -> image obs -> action mapping
+    # Wrapper stack: raw env -> reward -> sticky attack -> wood detection -> render -> image obs -> action mapping
     env = LogRewardWrapper(env)
     env = StickyAttackWrapper(env, sticky_ticks=15)
+    env = WoodDetectionRewardWrapper(env)
     if render:
         env = RenderWrapper(env)
     env = PovImageWrapper(env)
@@ -46,8 +48,8 @@ def run(render: bool = False):
         learning_rate=3e-4,
         gamma=0.99,
         tau=5e-3,
-        train_freq=1,
-        gradient_steps=1,
+        train_freq=4,
+        gradient_steps=4,
         learning_starts=1000,
     )
 
