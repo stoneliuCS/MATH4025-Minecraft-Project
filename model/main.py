@@ -203,10 +203,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run Q-learning agent training or evaluation")
     parser.add_argument(
         "--mode",
-        choices=["train", "run-learned", "dqn", "dqn-eval"],
+        choices=["train", "run-learned", "dqn", "dqn-eval", "sac"],
         default="train",
-        help="Mode: 'train' tabular Q-learning, 'run-learned' load Q-table, 'dqn' train DQN, 'dqn-eval' evaluate DQN",
+        help="Mode: 'train' tabular Q-learning, 'run-learned' load Q-table, 'dqn' train DQN, 'dqn-eval' evaluate DQN, 'sac' train SAC",
     )
+    parser.add_argument("--render", action="store_true", help="Enable env.render() during training")
     args = parser.parse_args()
 
     if args.mode == "train":
@@ -217,3 +218,6 @@ if __name__ == "__main__":
         run_dqn_training()
     elif args.mode == "dqn-eval":
         run_dqn_eval()
+    elif args.mode == "sac":
+        from model.sac.run import run as run_sac
+        run_sac(render=args.render)

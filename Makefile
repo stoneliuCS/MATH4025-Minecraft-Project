@@ -17,7 +17,7 @@ export PYTHONPATH
 INTERACTIVE_PORT ?= 6666
 MINERL_SRC ?= $(PROJECT_ROOT)/minerl
 
-.PHONY: help env venv check-java check-python print-env run run-learned dqn dqn-eval interactor patch-minerl
+.PHONY: help env venv check-java check-python print-env run run-learned dqn dqn-eval sac interactor patch-minerl
 
 help:
 	@echo "Targets:"
@@ -28,6 +28,7 @@ help:
 	@echo "  make run-learned Run the learned agent from saved Q-table (no training)"
 	@echo "  make dqn         Train the DQN agent on POV camera frames"
 	@echo "  make dqn-eval    Evaluate trained DQN agent with GUI"
+	@echo "  make sac         Train the SAC agent on GatherWood"
 	@echo "  make interactor  Run MineRL interactor on port $(INTERACTIVE_PORT)"
 	@echo "  make patch-minerl  Patch/rebuild MCP-Reborn and copy into venv"
 
@@ -103,6 +104,12 @@ dqn-eval: env
 	fi
 	@JAVA_HOME="$(JAVA_HOME_8)" PATH="$(JAVA_HOME_8)/bin:$$PATH" \
 	"$(VENV_DIR)/bin/python" -m model.main --mode dqn-eval
+
+RENDER ?=
+
+sac: env
+	@JAVA_HOME="$(JAVA_HOME_8)" PATH="$(JAVA_HOME_8)/bin:$$PATH" \
+	"$(VENV_DIR)/bin/python" -m model.main --mode sac $(if $(RENDER),--render,)
 
 interactor: env
 	@JAVA_HOME="$(JAVA_HOME_8)" PATH="$(JAVA_HOME_8)/bin:$$PATH" \

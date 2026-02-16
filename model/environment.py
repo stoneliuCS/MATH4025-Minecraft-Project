@@ -19,4 +19,3 @@ def create_environment(objective: str, interactive: bool | None) -> Env:
         env.make_interactive(port=INTERACTIVE_PORT, realtime=True)
         _logger.info("Interactive mode enabled. Minecraft client should connect automatically.")
     return env
-
