@@ -16,6 +16,8 @@ from dqn import DQN
 from replay_buffer import ReplayBuffer
 from wrappers import GrayscaleWrapper, FrameStackWrapper
 
+from reward_wrappers.east_wrapper import EastActionWrapper
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -113,6 +115,10 @@ def train_dqn(env):
     *env* should already be wrapped with RestrictedActionWrapper.
     This function adds GrayscaleWrapper + FrameStackWrapper on top.
     """
+
+    # add the wrapper to the environment which will generate the rewards
+    env = EastActionWrapper(env)
+
     env = GrayscaleWrapper(env)
     env = FrameStackWrapper(env, N_FRAMES)
 
@@ -122,6 +128,11 @@ def train_dqn(env):
 
     # create agent
     agent = DQNAgent(device=device)
+    # load the saved checkpoint if it exists
+    if os.path.exists(CHECKPOINT_PATH):
+        logger.info(f"Loading model checkpoint from: {CHECKPOINT_PATH}")
+        agent.target_net.load_state_dict(torch.load(CHECKPOINT_PATH, map_location=device))
+        agent.policy_net.load_state_dict(torch.load(CHECKPOINT_PATH, map_location=device))
     # create buffer to store recent states 
     buffer = ReplayBuffer(REPLAY_BUFFER_SIZE, frame_shape=(N_FRAMES, 64, 64))
 

@@ -5,9 +5,8 @@ import os
 import time
 from minerl import *
 
-from environment.restricted_wrapper import RestrictedActionWrapper
-from environment.distance_wrapper import DistanceActionWrapper
-
+#from environment.restricted_wrapper import RestrictedActionWrapper
+#from environment.distance_wrapper import DistanceActionWrapper
 
 
 
@@ -19,8 +18,8 @@ logging.basicConfig(level=logging.DEBUG)
 
 
 def _load_dqn_train():
-    """Import model/deep-q-learning/train.py (hyphenated dir needs importlib)."""
-    path = os.path.join(os.path.dirname(__file__), "deep-q-learning", "train.py")
+    """Import model/deep_q_learning/train.py (hyphenated dir needs importlib)."""
+    path = os.path.join(os.path.dirname(__file__), "deep_q_learning", "train.py")
     spec = importlib.util.spec_from_file_location("dqn_train", path)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
@@ -46,7 +45,7 @@ def run_dqn_training():
     try:
         train_env = create_environment(env_name, interactive=True)
         
-        dqn_train.train_dqn(DistanceActionWrapper(train_env))
+        dqn_train.train_dqn(train_env)
     finally:
         if train_env is not None:
             train_env.close()
