@@ -17,7 +17,7 @@ export PYTHONPATH
 INTERACTIVE_PORT ?= 6666
 MINERL_SRC ?= $(PROJECT_ROOT)/minerl
 
-.PHONY: help env venv check-java check-python print-env run run-learned dqn dqn-eval sac interactor patch-minerl
+.PHONY: help env venv check-java check-python print-env run run-learned dqn dqn-eval sac sac-eval interactor patch-minerl
 
 help:
 	@echo "Targets:"
@@ -29,6 +29,7 @@ help:
 	@echo "  make dqn         Train the DQN agent on POV camera frames"
 	@echo "  make dqn-eval    Evaluate trained DQN agent with GUI"
 	@echo "  make sac         Train the SAC agent on GatherWood"
+	@echo "  make sac-eval    Evaluate trained SAC agent with GUI"
 	@echo "  make interactor  Run MineRL interactor on port $(INTERACTIVE_PORT)"
 	@echo "  make patch-minerl  Patch/rebuild MCP-Reborn and copy into venv"
 
@@ -110,6 +111,15 @@ RENDER ?=
 sac: env
 	@JAVA_HOME="$(JAVA_HOME_8)" PATH="$(JAVA_HOME_8)/bin:$$PATH" \
 	"$(VENV_DIR)/bin/python" -m model.main --mode sac $(if $(RENDER),--render,)
+
+sac-eval: env
+	@if [ ! -f "$(PROJECT_ROOT)/artifacts/sac_final.zip" ]; then \
+		echo "Error: No saved SAC model found at artifacts/sac_final.zip"; \
+		echo "Run 'make sac' first to train the SAC agent."; \
+		exit 1; \
+	fi
+	@JAVA_HOME="$(JAVA_HOME_8)" PATH="$(JAVA_HOME_8)/bin:$$PATH" \
+	"$(VENV_DIR)/bin/python" -m model.sac.evaluate
 
 interactor: env
 	@JAVA_HOME="$(JAVA_HOME_8)" PATH="$(JAVA_HOME_8)/bin:$$PATH" \
