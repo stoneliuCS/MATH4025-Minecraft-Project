@@ -3,6 +3,8 @@ import sys
 import random
 import logging
 
+import mlflow
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -20,6 +22,8 @@ from reward_wrappers.east_wrapper import EastActionWrapper
 
 logger = logging.getLogger(__name__)
 
+mlflow.set_experiment("Q Learning East")
+
 # ---------------------------------------------------------------------------
 # Hyperparameters
 # ---------------------------------------------------------------------------
@@ -28,7 +32,7 @@ LEARNING_RATE = 1e-4
 BATCH_SIZE = 32
 REPLAY_BUFFER_SIZE = 100_000
 TARGET_UPDATE_FREQ = 100    # steps
-GAMMA = 0.7
+GAMMA = 0.8
 EPSILON_START = 1.0
 EPSILON_END = 0.05
 EPSILON_DECAY_STEPS = 1000
@@ -141,60 +145,85 @@ def train_dqn(env):
 
     all_rewards = []
 
-    for episode in range(1, N_EPISODES + 1):
-        state = env.reset()
-        episode_reward = 0.0
-        episode_loss = 0.0
-        loss_count = 0
+    # this is for logging purposes, signify that a new run is starting
+    with mlflow.start_run():
 
-        for step in range(MAX_STEPS_PER_EPISODE):
-            env.render()
-
-            
-            # inference the Q neural network to select an action
-            action = agent.select_action(state)
-            # take the action in the environment, get the next state and the reward
-            next_state, reward, done, info = env.step(action)
-            # add the information for this step to the state buffer
-            buffer.push(state, action, reward, next_state, done)
-            state = next_state
-            episode_reward += reward
-            agent.total_steps += 1
-
-            # Train after warmup
-            if agent.total_steps >= WARMUP_STEPS and len(buffer) >= BATCH_SIZE:
-                logger.info(f"doing optimization process...")
-                batch = buffer.sample(BATCH_SIZE)
-                loss = agent.optimize(batch)
-                episode_loss += loss
-                loss_count += 1
-
-            # Target network update
-            if agent.total_steps % TARGET_UPDATE_FREQ == 0:
-                agent.update_target()
-
-            if done:
-                break
-            
-            x = info['xpos']
-            z = info['zpos']
-            logger.info(f"agent.total_steps: {agent.total_steps}, action: {action}, x: {x}, z: {z}, reward: {reward}")
-
-        # give the information for this episode
-        avg_loss = episode_loss / loss_count if loss_count > 0 else 0.0
-        all_rewards.append(episode_reward)
-        logger.info(
-            f"Episode {episode:>3d}/{N_EPISODES} | "
-            f"Reward: {episode_reward:>8.2f} | "
-            f"Avg Loss: {avg_loss:.4f} | "
-            f"Epsilon: {agent.epsilon:.3f} | "
-            f"Buffer: {len(buffer):>6d} | "
-            f"Steps: {agent.total_steps}"
+        # log the parameters for this run: 
+        mlflow.log_params(
+            {
+                "learning_rate" : LEARNING_RATE, 
+                "gamma" : GAMMA, 
+                "target_update_freq" : TARGET_UPDATE_FREQ, 
+                "epsilon_start" : EPSILON_START,
+                "epsilon_end" : EPSILON_END,
+                "epsilon_decay_steps" : EPSILON_DECAY_STEPS, 
+                "warmup_steps" : WARMUP_STEPS,
+                "n_frames" : N_FRAMES, 
+                "max_steps_per_episode" : MAX_STEPS_PER_EPISODE, 
+                "checkpoint_freq" : CHECKPOINT_FREQ
+            }
         )
 
-        if episode % CHECKPOINT_FREQ == 0:
-            torch.save(agent.policy_net.state_dict(), CHECKPOINT_PATH)
-            logger.info(f"  -> Checkpoint saved to {CHECKPOINT_PATH}")
+
+        for episode in range(1, N_EPISODES + 1):
+            state = env.reset()
+            episode_reward = 0.0
+            episode_loss = 0.0
+            loss_count = 0
+
+            for step in range(MAX_STEPS_PER_EPISODE):
+                env.render()
+
+                
+                # inference the Q neural network to select an action
+                action = agent.select_action(state)
+                # take the action in the environment, get the next state and the reward
+                next_state, reward, done, info = env.step(action)
+                # add the information for this step to the state buffer
+                buffer.push(state, action, reward, next_state, done)
+                state = next_state
+                episode_reward += reward
+                agent.total_steps += 1
+
+                # Train after warmup
+                if agent.total_steps >= WARMUP_STEPS and len(buffer) >= BATCH_SIZE:
+                    logger.info(f"doing optimization process...")
+                    batch = buffer.sample(BATCH_SIZE)
+                    loss = agent.optimize(batch)
+                    episode_loss += loss
+                    loss_count += 1
+
+                # Target network update
+                if agent.total_steps % TARGET_UPDATE_FREQ == 0:
+                    agent.update_target()
+
+                if done:
+                    break
+                
+                x = info['xpos']
+                z = info['zpos']
+                logger.info(f"agent.total_steps: {agent.total_steps}, action: {action}, x: {x}, z: {z}, reward: {reward}")
+
+            # give the information for this episode
+            avg_loss = episode_loss / loss_count if loss_count > 0 else 0.0
+            all_rewards.append(episode_reward)
+            logger.info(
+                f"Episode {episode:>3d}/{N_EPISODES} | "
+                f"Reward: {episode_reward:>8.2f} | "
+                f"Avg Loss: {avg_loss:.4f} | "
+                f"Epsilon: {agent.epsilon:.3f} | "
+                f"Buffer: {len(buffer):>6d} | "
+                f"Steps: {agent.total_steps}"
+            )
+
+            # log the model's performance on mlflow
+            mlflow.log_metrics(
+                {"Average Loss": avg_loss, "Reward": reward}, step=episode
+            )
+
+            if episode % CHECKPOINT_FREQ == 0:
+                torch.save(agent.policy_net.state_dict(), CHECKPOINT_PATH)
+                logger.info(f"  -> Checkpoint saved to {CHECKPOINT_PATH}")
 
     # save a checkpoint for the current model weights
     torch.save(agent.policy_net.state_dict(), CHECKPOINT_PATH)
