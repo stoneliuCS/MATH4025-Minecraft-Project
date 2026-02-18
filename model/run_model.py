@@ -1,3 +1,4 @@
+import json
 import gym
 import numpy as np
 import pickle
@@ -161,6 +162,8 @@ def run_agent_with_q_learning(env: gym.Env, render_training: bool = False):
                 )[action],
             )
         return max_q_old_opt
+    episode_rewards = []
+
     for episode in range(NUMBER_OF_EPISODES):
         obs = env.reset()
         terminal = False
@@ -202,8 +205,15 @@ def run_agent_with_q_learning(env: gym.Env, render_training: bool = False):
 
         # Decay epsilon after each episode, but keep a minimum level of exploration
         current_epsilon = max(MIN_EPSILON, current_epsilon * EPSILON_DECAY)
+        episode_rewards.append(episode_reward)
         print(f"Episode {episode + 1}/{NUMBER_OF_EPISODES}, "
               f"reward={episode_reward:.2f}, epsilon={current_epsilon:.3f}")
+
+    # Save reward history
+    rewards_path = Path("artifacts/q_learning_rewards.json")
+    rewards_path.parent.mkdir(parents=True, exist_ok=True)
+    rewards_path.write_text(json.dumps(episode_rewards))
+
     return Q_table
 
 

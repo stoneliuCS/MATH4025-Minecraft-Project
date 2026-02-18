@@ -1,3 +1,4 @@
+import json
 import os
 import sys
 import random
@@ -164,6 +165,12 @@ def train_dqn(env):
         if episode % CHECKPOINT_FREQ == 0:
             torch.save(agent.policy_net.state_dict(), CHECKPOINT_PATH)
             logger.info(f"  -> Checkpoint saved to {CHECKPOINT_PATH}")
+
+    # Save reward history
+    rewards_path = os.path.join(os.path.dirname(CHECKPOINT_PATH), "dqn_rewards.json")
+    with open(rewards_path, "w") as f:
+        json.dump(all_rewards, f)
+    logger.info(f"Reward history saved to {rewards_path}")
 
     # Final save
     torch.save(agent.policy_net.state_dict(), CHECKPOINT_PATH)

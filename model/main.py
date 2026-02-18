@@ -48,7 +48,7 @@ def run_simple_environment():
             random_returns = evaluate_random_policy(
                 RestrictedActionWrapper(baseline_env),
                 episodes=5,
-                render=True,
+                render=False,
             )
             avg_random = sum(random_returns) / len(random_returns)
             logging.info(f"Random policy average return over 5 episodes: {avg_random:.2f}")
@@ -87,7 +87,7 @@ def run_simple_environment():
                 RestrictedActionWrapper(eval_env),
                 q_table,
                 episodes=5,
-                render=True,
+                render=False,
             )
             avg_learned = sum(learned_returns) / len(learned_returns)
             logging.info(
@@ -150,7 +150,7 @@ def run_learned_agent_only():
             RestrictedActionWrapper(eval_env),
             q_table,
             episodes=1,
-            render=False,
+            render=True,
         )
     finally:
         if eval_env is not None:
