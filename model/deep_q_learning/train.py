@@ -28,18 +28,18 @@ mlflow.set_experiment("Q Learning East")
 # Hyperparameters
 # ---------------------------------------------------------------------------
 N_ACTIONS = 10
-LEARNING_RATE = 1e-4
+LEARNING_RATE = 0.00001
 BATCH_SIZE = 32
 REPLAY_BUFFER_SIZE = 100_000
 TARGET_UPDATE_FREQ = 100    # steps
 GAMMA = 0.8
 EPSILON_START = 1.0
 EPSILON_END = 0.05
-EPSILON_DECAY_STEPS = 1000
+EPSILON_DECAY_STEPS = 5000
 WARMUP_STEPS = 10
 N_FRAMES = 6
 N_EPISODES = 200
-MAX_STEPS_PER_EPISODE = 250
+MAX_STEPS_PER_EPISODE = 750
 CHECKPOINT_FREQ = 5          # episodes
 CHECKPOINT_PATH = "artifacts/dqn_model.pt"
 
@@ -160,7 +160,8 @@ def train_dqn(env):
                 "warmup_steps" : WARMUP_STEPS,
                 "n_frames" : N_FRAMES, 
                 "max_steps_per_episode" : MAX_STEPS_PER_EPISODE, 
-                "checkpoint_freq" : CHECKPOINT_FREQ
+                "checkpoint_freq" : CHECKPOINT_FREQ,
+                "checkpoint_path" : CHECKPOINT_PATH
             }
         )
 
