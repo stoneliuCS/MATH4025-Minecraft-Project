@@ -121,6 +121,15 @@ sac-eval: env
 	@JAVA_HOME="$(JAVA_HOME_8)" PATH="$(JAVA_HOME_8)/bin:$$PATH" \
 	"$(VENV_DIR)/bin/python" -m model.sac.evaluate
 
+sac-checkpoint: env
+	@if [ ! -f "$(PROJECT_ROOT)/artifacts/sac/sac_wood_10000_steps.zip" ]; then \
+		echo "Error: No saved SAC model found at artifacts/sac_final.zip"; \
+		echo "Run 'make sac' first to train the SAC agent."; \
+		exit 1; \
+	fi
+	@JAVA_HOME="$(JAVA_HOME_8)" PATH="$(JAVA_HOME_8)/bin:$$PATH" \
+	"$(VENV_DIR)/bin/python" -m model.sac.evaluate
+
 interactor: env
 	@JAVA_HOME="$(JAVA_HOME_8)" PATH="$(JAVA_HOME_8)/bin:$$PATH" \
 	"$(VENV_DIR)/bin/python" -m minerl.interactor $(INTERACTIVE_PORT)

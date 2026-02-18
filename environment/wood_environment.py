@@ -12,7 +12,7 @@ import minerl.herobraine.hero.handlers as handlers
 from typing_extensions import override
 
 
-MAX_EPISODE_STEPS = 8000
+MAX_EPISODE_STEPS = 2000
 MAX_REWARD_THRESHOLD = 100
 FRAME_SIZE = 64
 CAMERA_MAX_ANGLE = 10.0
@@ -105,41 +105,101 @@ class LogRewardWrapper(gym.Wrapper):
         return 0
 
 
-class StickyAttackWrapper(gym.Wrapper):
-    """Hold attack for a minimum number of ticks once triggered."""
+class PersistentMineWrapper(gym.Wrapper):
+    """
+    Once the agent triggers attack while looking at wood, hold attack
+    continuously until the wood disappears from the center patch (block broken)
+    or a max timeout is reached.
 
-    def __init__(self, env, sticky_ticks: int = 8):
+    Replaces StickyAttackWrapper entirely — don't use both.
+    Place AFTER LogRewardWrapper, BEFORE WoodDetectionRewardWrapper.
+    """
+
+    WOOD_HSV_LOW  = np.array([15,  80,  80])
+    WOOD_HSV_HIGH = np.array([25, 180, 160])
+    LEAF_HSV_LOW  = np.array([35,  50,  40])
+    LEAF_HSV_HIGH = np.array([85, 255, 180])
+
+    CENTER_SIZE    = 32
+    CONTEXT_SIZE   = 96
+    WOOD_THRESHOLD = 0.15   # slightly lenient so drift mid-swing doesn't release early
+    LEAF_THRESHOLD = 0.10
+    MAX_HOLD_TICKS = 60     # safety cutoff (~3 sec at 20tps); oak takes ~30 ticks
+
+    def __init__(self, env):
         super().__init__(env)
-        self.sticky_ticks = sticky_ticks
-        self._attack_counter = 0
+        self._holding_attack = False
+        self._hold_ticks     = 0
+
+    def reset(self, **kwargs):
+        self._holding_attack = False
+        self._hold_ticks     = 0
+        return self.env.reset(**kwargs)
 
     def step(self, action):
         if isinstance(action, dict):
-            if action.get("attack", 0) == 1:
-                self._attack_counter = self.sticky_ticks
-            if self._attack_counter > 0:
-                action["attack"] = 1
-                self._attack_counter -= 1
-        return self.env.step(action)
+            action = self._maybe_override_attack(action)
+            obs, reward, done, info = self.env.step(action)
+            pov = obs.get("pov") if isinstance(obs, dict) else None
+            self._update_hold_state(action, pov)
+        else:
+            obs, reward, done, info = self.env.step(action)
 
-    def reset(self, **kwargs):
-        self._attack_counter = 0
-        return self.env.reset(**kwargs)
+        return obs, reward, done, info
+
+    def _is_looking_at_wood(self, pov) -> bool:
+        if pov is None:
+            return False
+        h, w   = pov.shape[:2]
+        cy, cx = h // 2, w // 2
+
+        ctx_half = self.CONTEXT_SIZE // 2
+        y0, y1 = max(cy - ctx_half, 0), min(cy + ctx_half, h)
+        x0, x1 = max(cx - ctx_half, 0), min(cx + ctx_half, w)
+        ctx_hsv   = cv2.cvtColor(pov[y0:y1, x0:x1], cv2.COLOR_RGB2HSV)
+        leaf_mask = cv2.inRange(ctx_hsv, self.LEAF_HSV_LOW, self.LEAF_HSV_HIGH)
+        has_leaves = np.count_nonzero(leaf_mask) / leaf_mask.size > self.LEAF_THRESHOLD
+
+        half   = self.CENTER_SIZE // 2
+        center = pov[cy - half:cy + half, cx - half:cx + half]
+        hsv    = cv2.cvtColor(center, cv2.COLOR_RGB2HSV)
+        wood_mask  = cv2.inRange(hsv, self.WOOD_HSV_LOW, self.WOOD_HSV_HIGH)
+        wood_ratio = np.count_nonzero(wood_mask) / wood_mask.size
+
+        leaf_center = cv2.inRange(hsv, self.LEAF_HSV_LOW, self.LEAF_HSV_HIGH)
+        crosshair_on_leaves = np.count_nonzero(leaf_center) / leaf_center.size > 0.25
+
+        return has_leaves and wood_ratio > self.WOOD_THRESHOLD and not crosshair_on_leaves
+
+    def _maybe_override_attack(self, action: dict) -> dict:
+        if self._holding_attack:
+            action = dict(action)
+            action["attack"] = 1
+        return action
+
+    def _update_hold_state(self, action: dict, pov):
+        if not self._holding_attack:
+            if action.get("attack", 0) == 1 and self._is_looking_at_wood(pov):
+                self._holding_attack = True
+                self._hold_ticks     = 1
+                logger.debug("⛏ PersistentMine: started hold")
+        else:
+            self._hold_ticks += 1
+            still_on_wood = self._is_looking_at_wood(pov)
+            timed_out     = self._hold_ticks >= self.MAX_HOLD_TICKS
+
+            if not still_on_wood:
+                logger.debug(f"⛏ PersistentMine: released after {self._hold_ticks} ticks (wood gone)")
+                self._holding_attack = False
+                self._hold_ticks     = 0
+            elif timed_out:
+                logger.debug(f"⛏ PersistentMine: released after timeout ({self.MAX_HOLD_TICKS} ticks)")
+                self._holding_attack = False
+                self._hold_ticks     = 0
 
 
 class WoodDetectionRewardWrapper(gym.Wrapper):
-    """Visual reward shaping.
-
-    Reward structure (rebalanced so positives outweigh negatives during
-    early exploration, preventing the agent from learning 'never attack'):
-
-      +0.05  looking at trunk pixels (crosshair on wood-brown, leaves in context)
-      +0.05  approaching wood (wood_ratio growing while moving forward)
-      +0.10  attacking while crosshair is on trunk  ← visual mine reward back
-      -0.03  attacking while crosshair is on leaves
-      -0.02  attacking with nothing recognisable in view
-      -0.05  attacking while looking down (pitch > 15°)
-    """
+    """Visual reward shaping — rebalanced to make attacking clearly the best action."""
 
     WOOD_HSV_LOW  = np.array([15,  80,  80])
     WOOD_HSV_HIGH = np.array([25, 180, 160])
@@ -154,12 +214,13 @@ class WoodDetectionRewardWrapper(gym.Wrapper):
     LEAF_THRESHOLD     = 0.10
     CENTER_LEAF_THRESH = 0.25
 
-    LOOK_REWARD         =  0.05
-    APPROACH_REWARD     =  0.05
-    MINE_REWARD         =  0.10
-    DIG_PENALTY         = -0.05
-    LEAF_ATTACK_PENALTY = -0.03
-    RANDOM_ATK_PENALTY  = -0.02
+    LOOK_REWARD         =  0.01   # small — can't be farmed by spinning
+    APPROACH_REWARD     =  0.02
+    MINE_REWARD         =  0.30   # large — makes attacking clearly optimal
+    DIG_PENALTY         = -0.10
+    LEAF_ATTACK_PENALTY = -0.05
+    RANDOM_ATK_PENALTY  = -0.01   # relaxed to not punish early exploration
+    STEP_PENALTY        = -0.001  # tiny living cost to discourage aimless wandering
 
     def __init__(self, env):
         super().__init__(env)
@@ -171,6 +232,9 @@ class WoodDetectionRewardWrapper(gym.Wrapper):
 
     def step(self, action):
         obs, reward, done, info = self.env.step(action)
+
+        reward += self.STEP_PENALTY
+
         pov = obs["pov"] if isinstance(obs, dict) else None
 
         attacking    = isinstance(action, dict) and action.get("attack", 0) == 1
@@ -183,7 +247,6 @@ class WoodDetectionRewardWrapper(gym.Wrapper):
             h, w = pov.shape[:2]
             cy, cx = h // 2, w // 2
 
-            # Context patch — are we near a tree?
             ctx_half = self.CONTEXT_SIZE // 2
             y0, y1 = max(cy - ctx_half, 0), min(cy + ctx_half, h)
             x0, x1 = max(cx - ctx_half, 0), min(cx + ctx_half, w)
@@ -192,7 +255,6 @@ class WoodDetectionRewardWrapper(gym.Wrapper):
             leaf_ratio = np.count_nonzero(leaf_mask) / leaf_mask.size
             has_leaves = leaf_ratio > self.LEAF_THRESHOLD
 
-            # Center patch — what is the crosshair on?
             half   = self.CENTER_SIZE // 2
             center = pov[cy - half:cy + half, cx - half:cx + half]
             hsv    = cv2.cvtColor(center, cv2.COLOR_RGB2HSV)
@@ -240,6 +302,33 @@ class WoodDetectionRewardWrapper(gym.Wrapper):
         return obs, reward, done, info
 
 
+class CameraStabilityWrapper(gym.Wrapper):
+    """Penalise large aimless camera movements to stop spinning behaviour.
+    Place BEFORE ActionWrapper (receives raw 4-dim float action from SAC).
+    """
+
+    def __init__(self, env, spin_threshold: float = 0.5, spin_penalty: float = -0.03):
+        super().__init__(env)
+        self.spin_threshold = spin_threshold
+        self.spin_penalty   = spin_penalty
+
+    def step(self, action):
+        obs, reward, done, info = self.env.step(action)
+        # action may be a raw numpy array (float) or already a MineRL dict
+        if isinstance(action, dict):
+            cam = action.get("camera", [0.0, 0.0])
+            # camera is in degrees; normalise by CAMERA_MAX_ANGLE to get [-1,1] scale
+            c0 = float(cam[0]) / CAMERA_MAX_ANGLE
+            c1 = float(cam[1]) / CAMERA_MAX_ANGLE
+        else:
+            c0 = float(action[0])
+            c1 = float(action[1])
+        cam_mag = (c0 ** 2 + c1 ** 2) ** 0.5
+        if cam_mag > self.spin_threshold:
+            reward += self.spin_penalty * (cam_mag - self.spin_threshold)
+        return obs, reward, done, info
+
+
 class RenderWrapper(gym.Wrapper):
     def step(self, action):
         self.env.render()
@@ -248,9 +337,6 @@ class RenderWrapper(gym.Wrapper):
 
 class ActionWrapper(gym.ActionWrapper):
     """Map a 4-dim vector in [-1, 1] to a MineRL action dict.
-
-    Simplified from 7 dims to 4 — removing back/left/right cuts the
-    search space significantly and speeds up learning.
 
     Layout:
         [0] camera pitch  — scaled to [-CAMERA_MAX_ANGLE, CAMERA_MAX_ANGLE]
