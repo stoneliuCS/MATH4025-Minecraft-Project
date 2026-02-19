@@ -45,6 +45,7 @@ class RestrictedActionWrapper(gym.ActionWrapper):
         self.prev_distance = None
         self.touched_yellow = False
         self.touched_red = False
+        self.prev_wood = 0
         self.yellow_zones_visited = set()
         self.was_in_yellow = False
         return self.env.reset(**kwargs)
@@ -82,6 +83,10 @@ class RestrictedActionWrapper(gym.ActionWrapper):
     # Convert discrete action index to dict before passing to underlying env
     converted_action = self.action(action)
     obs, reward, done, info = self.env.step(converted_action)
+    wood_now = obs.get("inventory", {}).get("log", 0)
+    reward += (wood_now - self.prev_wood) * 100
+    self.prev_wood = wood_now
+
     
     # Start with small step penalty to encourage efficiency
     reward = self.step_penalty

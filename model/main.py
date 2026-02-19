@@ -16,8 +16,11 @@ from .run_model import (
     load_q_table,
 )
 from environment.simple_environment import BoxedNavigationSimpleEnvironment
+from .train_ppo import train_ppo
 
 logging.basicConfig(level=logging.DEBUG)
+# logging.getLogger("minerl").setLevel(logging.WARNING)
+
 
 
 def _load_dqn_train():
@@ -199,11 +202,25 @@ def run_dqn_eval():
             eval_env.close()
 
 
+def run_ppo_training():
+    env_name = "BoxedNavigation-v0"
+    abs_box_env = BoxedNavigationSimpleEnvironment()
+    abs_box_env.register()
+
+    print("=" * 60)
+    print("Training PPO agent...")
+    print("=" * 60)
+
+    train_env = create_environment(env_name, interactive=False)
+    train_ppo(RestrictedActionWrapper(train_env))
+    train_env.close()
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run Q-learning agent training or evaluation")
     parser.add_argument(
         "--mode",
-        choices=["train", "run-learned", "dqn", "dqn-eval"],
+        choices=["train", "run-learned", "dqn", "dqn-eval", "ppo"],
         default="train",
         help="Mode: 'train' tabular Q-learning, 'run-learned' load Q-table, 'dqn' train DQN, 'dqn-eval' evaluate DQN",
     )
@@ -217,3 +234,5 @@ if __name__ == "__main__":
         run_dqn_training()
     elif args.mode == "dqn-eval":
         run_dqn_eval()
+    elif args.mode == "ppo":
+        run_ppo_training()

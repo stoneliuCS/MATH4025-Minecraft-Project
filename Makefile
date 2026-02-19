@@ -104,6 +104,11 @@ dqn-eval: env
 	@JAVA_HOME="$(JAVA_HOME_8)" PATH="$(JAVA_HOME_8)/bin:$$PATH" \
 	"$(VENV_DIR)/bin/python" -m model.main --mode dqn-eval
 
+ppo: env
+	@JAVA_HOME="$(JAVA_HOME_8)" PATH="$(JAVA_HOME_8)/bin:$$PATH" \
+	"$(VENV_DIR)/bin/python" -m model.main --mode ppo
+
+
 interactor: env
 	@JAVA_HOME="$(JAVA_HOME_8)" PATH="$(JAVA_HOME_8)/bin:$$PATH" \
 	"$(VENV_DIR)/bin/python" -m minerl.interactor $(INTERACTIVE_PORT)
