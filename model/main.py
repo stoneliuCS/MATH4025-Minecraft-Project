@@ -17,7 +17,7 @@ from .run_model import (
 )
 from environment.simple_environment import BoxedNavigationSimpleEnvironment
 
-logging.basicConfig(level=logging.DEBUG)
+# logging.basicConfig(level=logging.DEBUG)
 
 
 def _load_dqn_train():
@@ -203,7 +203,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run Q-learning agent training or evaluation")
     parser.add_argument(
         "--mode",
-        choices=["train", "run-learned", "dqn", "dqn-eval", "sac"],
+        choices=["train", "run-learned", "dqn", "dqn-eval", "sac", "ppo"],
         default="train",
         help="Mode: 'train' tabular Q-learning, 'run-learned' load Q-table, 'dqn' train DQN, 'dqn-eval' evaluate DQN, 'sac' train SAC",
     )
@@ -218,6 +218,9 @@ if __name__ == "__main__":
         run_dqn_training()
     elif args.mode == "dqn-eval":
         run_dqn_eval()
+    elif args.mode == "ppo":
+        from model.ppo.run import run as train_ppo
+        train_ppo(render=args.render)
     elif args.mode == "sac":
         from model.sac.run import run as run_sac
         run_sac(render=args.render)

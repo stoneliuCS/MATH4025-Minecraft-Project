@@ -29,6 +29,7 @@ help:
 	@echo "  make dqn         Train the DQN agent on POV camera frames"
 	@echo "  make dqn-eval    Evaluate trained DQN agent with GUI"
 	@echo "  make sac         Train the SAC agent on GatherWood"
+	@echo " make ppo         Train the PPO agent on GatherWood"
 	@echo "  make interactor  Run MineRL interactor on port $(INTERACTIVE_PORT)"
 	@echo "  make patch-minerl  Patch/rebuild MCP-Reborn and copy into venv"
 
@@ -110,6 +111,10 @@ RENDER ?=
 sac: env
 	@JAVA_HOME="$(JAVA_HOME_8)" PATH="$(JAVA_HOME_8)/bin:$$PATH" \
 	"$(VENV_DIR)/bin/python" -m model.main --mode sac $(if $(RENDER),--render,)
+
+ppo: env
+	@JAVA_HOME="$(JAVA_HOME_8)" PATH="$(JAVA_HOME_8)/bin:$$PATH" \
+	"$(VENV_DIR)/bin/python" -m model.main --mode ppo $(if $(RENDER),--render,)
 
 interactor: env
 	@JAVA_HOME="$(JAVA_HOME_8)" PATH="$(JAVA_HOME_8)/bin:$$PATH" \
