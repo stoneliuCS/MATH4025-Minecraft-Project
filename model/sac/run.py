@@ -22,7 +22,7 @@ CHECKPOINT_PATH = "artifacts/sac"
 MODEL_PATH = "artifacts/sac_final.zip"
 
 
-def run(render: bool = False):
+def run(render: bool = False, checkpoint: str = None):
     env_name = "GatherWood-v0"
     wood_env = GatherWoodEnvironment()
     wood_env.register()
@@ -39,19 +39,23 @@ def run(render: bool = False):
 
     os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
 
-    model = SAC(
-        "CnnPolicy",
-        env,
-        verbose=1,
-        buffer_size=100_000,
-        batch_size=128,
-        learning_rate=3e-4,
-        gamma=0.99,
-        tau=5e-3,
-        train_freq=4,
-        gradient_steps=4,
-        learning_starts=1000,
-    )
+    if checkpoint:
+        logger.info(f"Resuming from checkpoint: {checkpoint}")
+        model = SAC.load(checkpoint, env=env)
+    else:
+        model = SAC(
+            "CnnPolicy",
+            env,
+            verbose=1,
+            buffer_size=100_000,
+            batch_size=128,
+            learning_rate=3e-4,
+            gamma=0.99,
+            tau=5e-3,
+            train_freq=4,
+            gradient_steps=4,
+            learning_starts=1000,
+        )
 
     checkpoint_cb = CheckpointCallback(
         save_freq=10_000,
@@ -59,10 +63,11 @@ def run(render: bool = False):
         name_prefix="sac_wood",
     )
 
-    model = model.learn(
+    model.learn(
         total_timesteps=TOTAL_TIMESTEPS,
         callback=checkpoint_cb,
         log_interval=10,
+        reset_num_timesteps=checkpoint is None,
     )
 
     model.save(MODEL_PATH)
