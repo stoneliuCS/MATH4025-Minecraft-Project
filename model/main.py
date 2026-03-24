@@ -203,12 +203,16 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run Q-learning agent training or evaluation")
     parser.add_argument(
         "--mode",
-        choices=["train", "run-learned", "dqn", "dqn-eval", "sac"],
+        choices=["train", "run-learned", "dqn", "dqn-eval", "sac", "sac-pretrain"],
         default="train",
-        help="Mode: 'train' tabular Q-learning, 'run-learned' load Q-table, 'dqn' train DQN, 'dqn-eval' evaluate DQN, 'sac' train SAC",
+        help="Mode: 'train' tabular Q-learning, 'run-learned' load Q-table, 'dqn' train DQN, 'dqn-eval' evaluate DQN, 'sac' train SAC, 'sac-pretrain' BC pretrain SAC from MineRL data",
     )
     parser.add_argument("--render", action="store_true", help="Enable env.render() during training")
     parser.add_argument("--checkpoint", type=str, default=None, help="Path to checkpoint zip to resume from")
+    parser.add_argument("--pretrained", type=str, default=None, help="Path to BC-pretrained model to warm-start SAC")
+    parser.add_argument("--timesteps", type=int, default=None, help="Override total training timesteps for SAC")
+    parser.add_argument("--data-dir", type=str, default="data", help="Path to MineRL dataset directory (for sac-pretrain)")
+    parser.add_argument("--epochs", type=int, default=5, help="Number of BC pretraining epochs (for sac-pretrain)")
     args = parser.parse_args()
 
     if args.mode == "train":
@@ -221,4 +225,10 @@ if __name__ == "__main__":
         run_dqn_eval()
     elif args.mode == "sac":
         from model.sac.run import run as run_sac
-        run_sac(render=args.render, checkpoint=args.checkpoint)
+        kwargs = dict(render=args.render, checkpoint=args.checkpoint, pretrained=args.pretrained)
+        if args.timesteps is not None:
+            kwargs["timesteps"] = args.timesteps
+        run_sac(**kwargs)
+    elif args.mode == "sac-pretrain":
+        from model.sac.pretrain import pretrain as pretrain_sac
+        pretrain_sac(data_dir=args.data_dir, epochs=args.epochs)

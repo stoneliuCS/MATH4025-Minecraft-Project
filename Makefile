@@ -17,7 +17,7 @@ export PYTHONPATH
 INTERACTIVE_PORT ?= 6666
 MINERL_SRC ?= $(PROJECT_ROOT)/minerl
 
-.PHONY: help env venv check-java check-python print-env run run-learned dqn dqn-eval sac interactor patch-minerl
+.PHONY: help env venv check-java check-python print-env run run-learned dqn dqn-eval sac sac-pretrain interactor patch-minerl
 
 help:
 	@echo "Targets:"
@@ -29,6 +29,7 @@ help:
 	@echo "  make dqn         Train the DQN agent on POV camera frames"
 	@echo "  make dqn-eval    Evaluate trained DQN agent with GUI"
 	@echo "  make sac         Train the SAC agent on GatherWood"
+	@echo "  make sac-pretrain  BC pretrain SAC from MineRL dataset (no Minecraft needed)"
 	@echo "  make interactor  Run MineRL interactor on port $(INTERACTIVE_PORT)"
 	@echo "  make patch-minerl  Patch/rebuild MCP-Reborn and copy into venv"
 
@@ -106,10 +107,23 @@ dqn-eval: env
 	"$(VENV_DIR)/bin/python" -m model.main --mode dqn-eval
 
 RENDER ?=
+PRETRAINED ?=
+TIMESTEPS ?=
 
 sac: env
 	@JAVA_HOME="$(JAVA_HOME_8)" PATH="$(JAVA_HOME_8)/bin:$$PATH" \
-	"$(VENV_DIR)/bin/python" -m model.main --mode sac $(if $(RENDER),--render,)
+	"$(VENV_DIR)/bin/python" -m model.main --mode sac \
+	  $(if $(RENDER),--render,) \
+	  $(if $(PRETRAINED),--pretrained "$(PRETRAINED)",) \
+	  $(if $(TIMESTEPS),--timesteps "$(TIMESTEPS)",)
+
+DATA_DIR ?= data
+EPOCHS ?= 5
+
+sac-pretrain:
+	@"$(VENV_DIR)/bin/python" -m model.main --mode sac-pretrain \
+	  --data-dir "$(DATA_DIR)" --epochs "$(EPOCHS)"
+
 
 interactor: env
 	@JAVA_HOME="$(JAVA_HOME_8)" PATH="$(JAVA_HOME_8)/bin:$$PATH" \

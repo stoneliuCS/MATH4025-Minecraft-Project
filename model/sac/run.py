@@ -2,7 +2,9 @@ import logging
 import os
 
 from stable_baselines3 import SAC
-from stable_baselines3.common.callbacks import CheckpointCallback
+from stable_baselines3.common.callbacks import CallbackList, CheckpointCallback
+
+from model.sac.callbacks import RewardPlotCallback
 
 from environment.wood_environment import (
     GatherWoodEnvironment,
@@ -17,12 +19,12 @@ from model.environment import create_environment
 
 logger = logging.getLogger(__name__)
 
-TOTAL_TIMESTEPS = 500_000
+TOTAL_TIMESTEPS = 100_000
 CHECKPOINT_PATH = "artifacts/sac"
 MODEL_PATH = "artifacts/sac_final.zip"
 
 
-def run(render: bool = False, checkpoint: str = None):
+def run(render: bool = False, checkpoint: str | None = None, pretrained: str | None = None, timesteps: int = TOTAL_TIMESTEPS):
     env_name = "GatherWood-v0"
     wood_env = GatherWoodEnvironment()
     wood_env.register()
@@ -42,6 +44,10 @@ def run(render: bool = False, checkpoint: str = None):
     if checkpoint:
         logger.info(f"Resuming from checkpoint: {checkpoint}")
         model = SAC.load(checkpoint, env=env)
+    elif pretrained:
+        logger.info(f"Loading pretrained BC weights: {pretrained}")
+        model = SAC.load(pretrained, env=env)
+        model.learning_starts = 0  # network already initialised — skip random warmup
     else:
         model = SAC(
             "CnnPolicy",
@@ -62,10 +68,11 @@ def run(render: bool = False, checkpoint: str = None):
         save_path=CHECKPOINT_PATH,
         name_prefix="sac_wood",
     )
+    reward_cb = RewardPlotCallback(output_path="artifacts/reward_plot.png")
 
     model.learn(
-        total_timesteps=TOTAL_TIMESTEPS,
-        callback=checkpoint_cb,
+        total_timesteps=timesteps,
+        callback=CallbackList([checkpoint_cb, reward_cb]),
         log_interval=10,
         reset_num_timesteps=checkpoint is None,
     )

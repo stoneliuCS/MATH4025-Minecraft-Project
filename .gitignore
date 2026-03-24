@@ -31,3 +31,5 @@ bundler/
 HeadlessMC/
 minerl/
 __pycache__
+data/
+venv-data/
