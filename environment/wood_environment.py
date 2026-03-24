@@ -17,39 +17,49 @@ MAX_REWARD_THRESHOLD = 100
 FRAME_SIZE = 64
 CAMERA_MAX_ANGLE = 10.0
 ACTION_DIM = 7  # 2 camera + 5 discrete (forward, back, left, right, attack)
-LOG_ITEMS = ["oak_log", "spruce_log", "birch_log", "jungle_log", "acacia_log", "dark_oak_log"]
+LOG_ITEMS = [
+    "oak_log",
+    "spruce_log",
+    "birch_log",
+    "jungle_log",
+    "acacia_log",
+    "dark_oak_log",
+]
 
 """
 Randomized Environment
 """
 
+
 class PovImageWrapper(gym.ObservationWrapper):  # pyright: ignore[reportPrivateImportUsage]
-  """Extract 'pov' from MineRL Dict obs, resize, and return as (C, H, W) uint8 image.
+    """Extract 'pov' from MineRL Dict obs, resize, and return as (C, H, W) uint8 image.
 
-  SB3's CnnPolicy expects channel-first image observations with pixel values in [0, 255].
-  """
+    SB3's CnnPolicy expects channel-first image observations with pixel values in [0, 255].
+    """
 
-  def __init__(self, env):
-      super().__init__(env)
-      self.observation_space = gym.spaces.Box(
-          low=0, high=255,
-          shape=(3, FRAME_SIZE, FRAME_SIZE),
-          dtype=np.uint8,
-      )
+    def __init__(self, env):
+        super().__init__(env)
+        self.observation_space = gym.spaces.Box(
+            low=0,
+            high=255,
+            shape=(3, FRAME_SIZE, FRAME_SIZE),
+            dtype=np.uint8,
+        )
 
-  def observation(self, observation):
-      pov = observation["pov"] if isinstance(observation, dict) else observation
-      img = cv2.resize(pov, (FRAME_SIZE, FRAME_SIZE), interpolation=cv2.INTER_AREA)
-      # (H, W, C) -> (C, H, W)
-      return np.transpose(img, (2, 0, 1)).astype(np.uint8)
+    def observation(self, observation):
+        pov = observation["pov"] if isinstance(observation, dict) else observation
+        img = cv2.resize(pov, (FRAME_SIZE, FRAME_SIZE), interpolation=cv2.INTER_AREA)
+        # (H, W, C) -> (C, H, W)
+        return np.transpose(img, (2, 0, 1)).astype(np.uint8)
 
-  def reset(self, **kwargs):
-      obs = self.env.reset(**kwargs)
-      return self.observation(obs)
+    def reset(self, **kwargs):
+        obs = self.env.reset(**kwargs)
+        return self.observation(obs)
 
-  def step(self, action):
-      obs, reward, done, info = self.env.step(action)
-      return self.observation(obs), reward, done, info
+    def step(self, action):
+        obs, reward, done, info = self.env.step(action)
+        return self.observation(obs), reward, done, info
+
 
 class LogRewardWrapper(gym.Wrapper):  # pyright: ignore[reportPrivateImportUsage]
     """Compute reward from inventory log count changes.
@@ -75,7 +85,9 @@ class LogRewardWrapper(gym.Wrapper):  # pyright: ignore[reportPrivateImportUsage
         log_diff = cur_logs - self._prev_logs
         if log_diff > 0:
             reward += log_diff * self.reward_per_log
-            logger.info(f"Collected wood! logs: {cur_logs} (+{log_diff}) reward: {reward}")
+            logger.info(
+                f"Collected wood! logs: {cur_logs} (+{log_diff}) reward: {reward}"
+            )
             with open("artifacts/reward_log.txt", "a") as f:
                 f.write(f"logs: {cur_logs} (+{log_diff}) reward: {reward}\n")
         self._prev_logs = cur_logs
@@ -167,23 +179,29 @@ class WoodDetectionRewardWrapper(gym.Wrapper):  # pyright: ignore[reportPrivateI
 
             # Check for wood-brown in the center patch
             half = self.CENTER_SIZE // 2
-            center = pov[cy - half:cy + half, cx - half:cx + half]
+            center = pov[cy - half : cy + half, cx - half : cx + half]
             hsv = cv2.cvtColor(center, cv2.COLOR_RGB2HSV)
             mask = cv2.inRange(hsv, self.WOOD_HSV_LOW, self.WOOD_HSV_HIGH)
             wood_ratio = np.count_nonzero(mask) / mask.size
 
             if has_leaves and wood_ratio > self.WOOD_THRESHOLD:
-                attacking = (isinstance(action, dict) and action.get("attack", 0) == 1)
+                attacking = isinstance(action, dict) and action.get("attack", 0) == 1
                 if attacking:
                     reward += self.MINE_REWARD
-                    logger.info(f"mining wood (wood={wood_ratio:.2f}, leaf={leaf_ratio:.2f}) +{self.MINE_REWARD}")
+                    logger.info(
+                        f"mining wood (wood={wood_ratio:.2f}, leaf={leaf_ratio:.2f}) +{self.MINE_REWARD}"
+                    )
                 else:
                     reward += self.LOOK_REWARD
-                    logger.info(f"looking at wood (wood={wood_ratio:.2f}, leaf={leaf_ratio:.2f}) +{self.LOOK_REWARD}")
+                    logger.info(
+                        f"looking at wood (wood={wood_ratio:.2f}, leaf={leaf_ratio:.2f}) +{self.LOOK_REWARD}"
+                    )
             # Reward approaching: wood getting bigger in the frame (only near trees)
             if has_leaves and wood_ratio > self._prev_wood_ratio and wood_ratio > 0.05:
                 reward += self.APPROACH_REWARD
-                logger.info(f"approaching wood (wood={wood_ratio:.2f}, prev={self._prev_wood_ratio:.2f}, leaf={leaf_ratio:.2f}) +{self.APPROACH_REWARD}")
+                logger.info(
+                    f"approaching wood (wood={wood_ratio:.2f}, prev={self._prev_wood_ratio:.2f}, leaf={leaf_ratio:.2f}) +{self.APPROACH_REWARD}"
+                )
             self._prev_wood_ratio = wood_ratio
         return obs, reward, done, info
 
@@ -212,15 +230,21 @@ class ActionWrapper(gym.ActionWrapper):  # pyright: ignore[reportPrivateImportUs
     def __init__(self, env):
         super().__init__(env)
         self.action_space = gym.spaces.Box(
-            low=-1.0, high=1.0, shape=(ACTION_DIM,), dtype=np.float32,
+            low=-1.0,
+            high=1.0,
+            shape=(ACTION_DIM,),
+            dtype=np.float32,
         )
 
     def action(self, action: np.ndarray) -> dict:
         noop = self.env.action_space.noop()  # pyright: ignore[reportAttributeAccessIssue]
-        noop["camera"] = np.array([
-            action[0] * CAMERA_MAX_ANGLE,
-            action[1] * CAMERA_MAX_ANGLE,
-        ], dtype=np.float32)
+        noop["camera"] = np.array(
+            [
+                action[0] * CAMERA_MAX_ANGLE,
+                action[1] * CAMERA_MAX_ANGLE,
+            ],
+            dtype=np.float32,
+        )
         noop["forward"] = int(action[2] > 0)
         noop["back"] = int(action[3] > 0)
         noop["left"] = int(action[4] > 0)
@@ -234,15 +258,14 @@ class ActionWrapper(gym.ActionWrapper):  # pyright: ignore[reportPrivateImportUs
 
 class GatherWoodEnvironment(HumanControlEnvSpec):
     def __init__(self, *args, **kwargs):
-        if 'name' not in kwargs:
-            kwargs['name'] = 'GatherWood-v0'
+        if "name" not in kwargs:
+            kwargs["name"] = "GatherWood-v0"
         super().__init__(
             *args,
-            name=kwargs['name'],
+            name=kwargs["name"],
             max_episode_steps=MAX_EPISODE_STEPS,
             reward_threshold=MAX_REWARD_THRESHOLD,
         )
-
 
     @override
     def create_server_world_generators(self) -> list[Handler]:
@@ -250,32 +273,34 @@ class GatherWoodEnvironment(HumanControlEnvSpec):
 
     @override
     def create_agent_start(self) -> list[Handler]:
+        import os
 
-      import os
-      world_path = os.path.join(os.path.dirname(__file__), "worlds", "getwood.zip")
-      return [
-          handlers.LoadWorldAgentStart(world_path),
-          handlers.GammaSetting(2.0),
-          handlers.FOVSetting(70.0),
-          handlers.FakeCursorSize(16),
-          handlers.GuiScale(1),
-          handlers.PreferredSpawnBiome("forest"),
-      ]
-    
+        world_path = os.path.join(os.path.dirname(__file__), "worlds", "getwood.zip")
+        return [
+            handlers.LoadWorldAgentStart(world_path),
+            handlers.GammaSetting(2.0),
+            handlers.FOVSetting(70.0),
+            handlers.FakeCursorSize(16),
+            handlers.GuiScale(1),
+            handlers.PreferredSpawnBiome("forest"),
+            handlers.SimpleInventoryAgentStart(
+                [{"type": "diamond_axe", "quantity": 1}]
+            ),
+        ]
+
     @override
     def create_rewardables(self) -> list[TranslationHandler]:
         return []
 
     @override
     def create_agent_handlers(self) -> list[Handler]:
-      return []
-
+        return []
 
     @override
     def create_server_quit_producers(self) -> list[Handler]:
         return [
             handlers.ServerQuitFromTimeUp(MAX_EPISODE_STEPS * 50),
-            handlers.ServerQuitWhenAnyAgentFinishes()
+            handlers.ServerQuitWhenAnyAgentFinishes(),
         ]
 
     @override
@@ -284,18 +309,19 @@ class GatherWoodEnvironment(HumanControlEnvSpec):
 
     @override
     def determine_success_from_rewards(self, rewards: list) -> bool:
-        return sum(rewards) >= self.reward_threshold # pyright: ignore[reportOperatorIssue]
+        return sum(rewards) >= self.reward_threshold  # pyright: ignore[reportOperatorIssue]
 
     @override
     def is_from_folder(self, folder: str) -> bool:
-        return folder == 'simple'
+        return folder == "simple"
 
     @override
     def get_docstring(self):
         return super().get_docstring()
+
     @override
     def create_actionables(self) -> list[TranslationHandler]:
-        return super().create_actionables() 
+        return super().create_actionables()
 
     @override
     def create_observables(self) -> list[TranslationHandler]:
@@ -310,4 +336,3 @@ class GatherWoodEnvironment(HumanControlEnvSpec):
             handlers.TimeInitialCondition(allow_passage_of_time=False),
             handlers.SpawningInitialCondition(allow_spawning=True),
         ]
-                                         
