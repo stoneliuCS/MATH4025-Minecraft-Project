@@ -117,10 +117,17 @@ def _plot(results: list[tuple[int, float, float]], out_dir: str):
 
 def evaluate(
     checkpoint_dir: str = "artifacts/sac",
+    checkpoint: str | None = None,
     episodes: int = 3,
     out_dir: str = "artifacts",
 ):
-    checkpoints = _discover_checkpoints(checkpoint_dir)
+    if checkpoint:
+        p = Path(checkpoint)
+        m = re.compile(r"_(\d+)_steps\.zip$").search(p.name)
+        step = int(m.group(1)) if m else 0
+        checkpoints = [(step, p)]
+    else:
+        checkpoints = _discover_checkpoints(checkpoint_dir)
     if not checkpoints:
         raise FileNotFoundError(f"No checkpoint zips found in {checkpoint_dir}")
 
@@ -147,9 +154,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--checkpoint-dir", default="artifacts/sac",
                         help="Directory containing sac_wood_*_steps.zip files")
+    parser.add_argument("--checkpoint", default=None,
+                        help="Path to a single checkpoint zip to evaluate")
     parser.add_argument("--episodes", type=int, default=3,
                         help="Episodes to run per checkpoint")
     parser.add_argument("--out", default="artifacts",
                         help="Directory to save CSV and plot")
     args = parser.parse_args()
-    evaluate(checkpoint_dir=args.checkpoint_dir, episodes=args.episodes, out_dir=args.out)
+    evaluate(checkpoint_dir=args.checkpoint_dir, checkpoint=args.checkpoint, episodes=args.episodes, out_dir=args.out)

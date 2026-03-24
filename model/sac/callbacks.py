@@ -39,10 +39,8 @@ class RewardPlotCallback(BaseCallback):
                 f.write(f"{ts},{r}\n")
         logger.info(f"Reward data saved to {csv_path}")
 
-    def _on_training_end(self) -> None:
-        self._save_rewards()
+    def _plot(self) -> None:
         if not self.episode_rewards:
-            logger.warning("No episode data collected — skipping reward plot.")
             return
 
         try:
@@ -78,3 +76,10 @@ class RewardPlotCallback(BaseCallback):
         fig.savefig(self.output_path, dpi=150)
         plt.close(fig)
         logger.info(f"Reward plot saved to {self.output_path}")
+
+    def _on_training_end(self) -> None:
+        self._save_rewards()
+        if not self.episode_rewards:
+            logger.warning("No episode data collected — skipping reward plot.")
+            return
+        self._plot()
