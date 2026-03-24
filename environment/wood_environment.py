@@ -12,10 +12,10 @@ import minerl.herobraine.hero.handlers as handlers
 from typing_extensions import override
 
 
-MAX_EPISODE_STEPS = 2000
+MAX_EPISODE_STEPS = 500          # ← shortened from 2000
 MAX_REWARD_THRESHOLD = 100
 FRAME_SIZE = 64
-CAMERA_MAX_ANGLE = 10.0
+CAMERA_MAX_ANGLE = 5.0           # ← reduced from 10.0
 ACTION_DIM = 5  # camera_pitch, camera_yaw, forward, attack, jump
 LOG_ITEMS = ["oak_log", "spruce_log", "birch_log", "jungle_log", "acacia_log", "dark_oak_log"]
 
@@ -189,11 +189,13 @@ def _detect_close_wood(pov: np.ndarray, center_size: int) -> bool:
 
 
 class WoodDetectionRewardWrapper(gym.Wrapper):
-    """Simple reward shaping — no movement overrides, just rewards/penalties.
+    """Reward shaping that strongly incentivises sustained mining.
 
-    The agent is free to move however it wants. It gets:
-      +0.30 for attacking a nearby trunk
-      +0.01 for looking at a nearby trunk
+    The agent gets:
+      +0.30 × multiplier for attacking a nearby trunk (multiplier grows
+             with consecutive mine ticks, up to 3×)
+      +0.05 for keeping camera still while attacking wood
+      +0.01 for looking at a nearby trunk (without attacking)
       -0.01 for attacking non-wood
       -0.001 per step (living cost)
       -0.10 for looking straight down and attacking (digging)
@@ -203,14 +205,17 @@ class WoodDetectionRewardWrapper(gym.Wrapper):
 
     LOOK_REWARD         =  0.01
     MINE_REWARD         =  0.30
+    STEADY_AIM_BONUS    =  0.05   # ← NEW: reward for holding camera still while mining
     DIG_PENALTY         = -0.10
     RANDOM_ATK_PENALTY  = -0.01
     STEP_PENALTY        = -0.001
 
     def __init__(self, env):
         super().__init__(env)
+        self._consecutive_mine = 0
 
     def reset(self, **kwargs):
+        self._consecutive_mine = 0
         return self.env.reset(**kwargs)
 
     def step(self, action):
@@ -222,23 +227,39 @@ class WoodDetectionRewardWrapper(gym.Wrapper):
         attacking = isinstance(action, dict) and action.get("attack", 0) == 1
         cam = action.get("camera", [0.0, 0.0]) if isinstance(action, dict) else [0.0, 0.0]
         cam_pitch = float(cam[0]) if hasattr(cam, "__len__") else 0.0
+        cam_yaw   = float(cam[1]) if hasattr(cam, "__len__") else 0.0
         looking_down = cam_pitch > 15.0
+        cam_magnitude = (cam_pitch ** 2 + cam_yaw ** 2) ** 0.5
 
         if pov is not None:
             looking_at_wood = _detect_close_wood(pov, self.CENTER_SIZE)
 
             if looking_at_wood:
                 if attacking:
-                    reward += self.MINE_REWARD
-                    logger.info(f"✅ mining birch +{self.MINE_REWARD}")
+                    # ── Sustained mining bonus ──────────────────────
+                    self._consecutive_mine += 1
+                    multiplier = min(self._consecutive_mine / 10.0, 3.0)
+                    reward += self.MINE_REWARD * multiplier
+                    # ── Steady aim bonus ────────────────────────────
+                    if cam_magnitude < 1.0:
+                        reward += self.STEADY_AIM_BONUS
+                    if self._consecutive_mine % 10 == 0:
+                        logger.info(
+                            f"⛏️  sustained mine tick={self._consecutive_mine} "
+                            f"multiplier={multiplier:.1f}"
+                        )
                 else:
+                    self._consecutive_mine = 0
                     reward += self.LOOK_REWARD
             else:
+                self._consecutive_mine = 0
                 if attacking:
                     reward += self.RANDOM_ATK_PENALTY
 
         if attacking and looking_down:
             reward += self.DIG_PENALTY
+
+        info["mining_ticks"] = self._consecutive_mine
 
         return obs, reward, done, info
 
