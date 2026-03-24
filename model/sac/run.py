@@ -69,7 +69,7 @@ def run(render: bool = False, checkpoint: str | None = None, pretrained: str | N
         save_path=checkpoint_out,
         name_prefix="sac_wood",
     )
-    reward_cb = RewardPlotCallback(output_path="artifacts/reward_plot.png")
+    reward_cb = RewardPlotCallback(output_path=os.path.join(checkpoint_out, "reward_plot.png"))
 
     model.learn(
         total_timesteps=timesteps,
