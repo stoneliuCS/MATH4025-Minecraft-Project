@@ -211,6 +211,7 @@ if __name__ == "__main__":
     parser.add_argument("--checkpoint", type=str, default=None, help="Path to checkpoint zip to resume from")
     parser.add_argument("--pretrained", type=str, default=None, help="Path to BC-pretrained model to warm-start SAC")
     parser.add_argument("--timesteps", type=int, default=None, help="Override total training timesteps for SAC")
+    parser.add_argument("--checkpoint-out", type=str, default=None, help="Directory to save SAC checkpoints during training")
     parser.add_argument("--data-dir", type=str, default="data", help="Path to MineRL dataset directory (for sac-pretrain)")
     parser.add_argument("--epochs", type=int, default=5, help="Number of BC pretraining epochs (for sac-pretrain)")
     args = parser.parse_args()
@@ -228,6 +229,8 @@ if __name__ == "__main__":
         kwargs = dict(render=args.render, checkpoint=args.checkpoint, pretrained=args.pretrained)
         if args.timesteps is not None:
             kwargs["timesteps"] = args.timesteps
+        if args.checkpoint_out is not None:
+            kwargs["checkpoint_out"] = args.checkpoint_out
         run_sac(**kwargs)
     elif args.mode == "sac-pretrain":
         from model.sac.pretrain import pretrain as pretrain_sac

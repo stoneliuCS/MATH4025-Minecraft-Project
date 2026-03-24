@@ -24,7 +24,7 @@ CHECKPOINT_PATH = "artifacts/sac"
 MODEL_PATH = "artifacts/sac_final.zip"
 
 
-def run(render: bool = False, checkpoint: str | None = None, pretrained: str | None = None, timesteps: int = TOTAL_TIMESTEPS):
+def run(render: bool = False, checkpoint: str | None = None, pretrained: str | None = None, timesteps: int = TOTAL_TIMESTEPS, checkpoint_out: str = CHECKPOINT_PATH):
     env_name = "GatherWood-v0"
     wood_env = GatherWoodEnvironment()
     wood_env.register()
@@ -63,9 +63,10 @@ def run(render: bool = False, checkpoint: str | None = None, pretrained: str | N
             learning_starts=1000,
         )
 
+    os.makedirs(checkpoint_out, exist_ok=True)
     checkpoint_cb = CheckpointCallback(
         save_freq=10_000,
-        save_path=CHECKPOINT_PATH,
+        save_path=checkpoint_out,
         name_prefix="sac_wood",
     )
     reward_cb = RewardPlotCallback(output_path="artifacts/reward_plot.png")
