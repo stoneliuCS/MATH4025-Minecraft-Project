@@ -59,7 +59,7 @@ class LogRewardWrapper(gym.Wrapper):  # pyright: ignore[reportPrivateImportUsage
     observation directly and rewards +1 per new log collected.
     """
 
-    def __init__(self, env, reward_per_log: float = 1.0):
+    def __init__(self, env, reward_per_log: float = 100.0):
         super().__init__(env)
         self.reward_per_log = reward_per_log
         self._prev_logs = 0

@@ -5,6 +5,7 @@ from stable_baselines3 import SAC
 from stable_baselines3.common.callbacks import CallbackList, CheckpointCallback
 
 from model.sac.callbacks import RewardPlotCallback
+from model.sac.replay_buffer import NStepReplayBuffer
 
 from environment.wood_environment import (
     GatherWoodEnvironment,
@@ -61,6 +62,8 @@ def run(render: bool = False, checkpoint: str | None = None, pretrained: str | N
             train_freq=4,
             gradient_steps=4,
             learning_starts=1000,
+            replay_buffer_class=NStepReplayBuffer,
+            replay_buffer_kwargs={"n_steps": 25, "gamma": 0.99},
         )
 
     os.makedirs(checkpoint_out, exist_ok=True)
