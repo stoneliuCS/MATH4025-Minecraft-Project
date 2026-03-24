@@ -5,13 +5,13 @@ from stable_baselines3.common.callbacks import CheckpointCallback, BaseCallback
 from environment.wood_environment import (
     GatherWoodEnvironment,
     LogRewardWrapper,
-    PersistentMineWrapper,
     WoodDetectionRewardWrapper,
     CameraStabilityWrapper,
     PovImageWrapper,
     RenderWrapper,
     ActionWrapper,
 )
+from model.callbacks import TrainingMetricsCallback
 from model.environment import create_environment
 
 logger = logging.getLogger(__name__)
@@ -57,19 +57,17 @@ class EpisodeLogCallback(BaseCallback):
 def run(render: bool = True, small_training: bool = False):
     env_name = "GatherWood-v0"
     GatherWoodEnvironment().register()
-
     env = create_environment(env_name, interactive=render)
 
     # Wrapper stack — order matters
-    env = LogRewardWrapper(env)                        # true log reward
-    env = PersistentMineWrapper(env)                   # hold attack until block breaks
+    env = LogRewardWrapper(env)                        # +1 per log pickup
     env = WoodDetectionRewardWrapper(env)              # visual shaping
     env = CameraStabilityWrapper(env,                  # anti-spin
               spin_threshold=0.5, spin_penalty=-0.03)
     if render:
         env = RenderWrapper(env)
     env = PovImageWrapper(env)    # dict → (C,H,W) uint8
-    env = ActionWrapper(env)      # 4-dim float → MineRL dict
+    env = ActionWrapper(env)      # 5-dim float → MineRL dict
 
     os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
 
@@ -106,10 +104,11 @@ def run(render: bool = True, small_training: bool = False):
         name_prefix="sac_wood",
     )
     episode_cb = EpisodeLogCallback()
+    metrics_cb = TrainingMetricsCallback(save_dir="artifacts", save_freq=5, verbose=1)
 
     model.learn(
         total_timesteps=timesteps,
-        callback=[checkpoint_cb, episode_cb],
+        callback=[checkpoint_cb, episode_cb, metrics_cb],
         log_interval=10,
     )
 

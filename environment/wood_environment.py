@@ -16,26 +16,21 @@ MAX_EPISODE_STEPS = 2000
 MAX_REWARD_THRESHOLD = 100
 FRAME_SIZE = 64
 CAMERA_MAX_ANGLE = 10.0
-ACTION_DIM = 4  # camera_pitch, camera_yaw, forward, attack
+ACTION_DIM = 5  # camera_pitch, camera_yaw, forward, attack, jump
 LOG_ITEMS = ["oak_log", "spruce_log", "birch_log", "jungle_log", "acacia_log", "dark_oak_log"]
 
 # ── Birch bark HSV range ───────────────────────────────────────────────
-# Birch bark is off-white / cream with dark stripes.  With gamma=2.0 the
-# bark gets washed out to near-white, so we need very permissive ranges:
-# S can drop to near 0 and V can hit 255.  We accept any warm-ish hue
-# with low saturation and high value.
 BIRCH_WOOD_HSV_LOW  = np.array([0,    0,  130])
 BIRCH_WOOD_HSV_HIGH = np.array([35, 100,  255])
-
-# Dark horizontal stripe pixels — near-black with minimal saturation.
 BIRCH_STRIPE_HSV_LOW  = np.array([0,   0,   20])
 BIRCH_STRIPE_HSV_HIGH = np.array([180, 50,  130])
 
 # ── Birch leaf HSV range ──────────────────────────────────────────────
-# Birch leaves #80a755 → OpenCV HSV ≈ H44, S125, V167.
-# With gamma=2.0 values shift brighter.  Keep range generous.
 BIRCH_LEAF_HSV_LOW  = np.array([30,  50,  80])
 BIRCH_LEAF_HSV_HIGH = np.array([55, 220, 230])
+
+# Nearby trunk must have a vertical column filling this much of the patch
+MIN_VERTICAL_FILL = 0.40
 
 
 class PovImageWrapper(gym.ObservationWrapper):
@@ -124,181 +119,98 @@ class LogRewardWrapper(gym.Wrapper):
 
 
 def _birch_wood_mask(hsv_patch: np.ndarray) -> np.ndarray:
-    """Return a combined binary mask that matches birch bark (pale body + dark stripes)."""
     mask_body   = cv2.inRange(hsv_patch, BIRCH_WOOD_HSV_LOW,   BIRCH_WOOD_HSV_HIGH)
     mask_stripe = cv2.inRange(hsv_patch, BIRCH_STRIPE_HSV_LOW, BIRCH_STRIPE_HSV_HIGH)
     return cv2.bitwise_or(mask_body, mask_stripe)
 
 
 def _birch_leaf_mask(hsv_patch: np.ndarray) -> np.ndarray:
-    """Return a binary mask for birch leaves."""
     return cv2.inRange(hsv_patch, BIRCH_LEAF_HSV_LOW, BIRCH_LEAF_HSV_HIGH)
 
 
 def _has_leaves_above(pov: np.ndarray, context_size: int, leaf_threshold: float) -> bool:
-    """Check for birch leaves in the UPPER portion of the context patch only.
-
-    This avoids false positives from grass on the ground, which shares
-    a similar hue with birch leaves.  Real leaves from a tree canopy
-    appear in the upper half of the viewport when the agent is near a trunk.
-    """
     h, w = pov.shape[:2]
     cy, cx = h // 2, w // 2
     ctx_half = context_size // 2
-
     y0 = max(cy - ctx_half, 0)
-    y1 = cy  # only the upper half of the context (above crosshair)
+    y1 = cy
     x0 = max(cx - ctx_half, 0)
     x1 = min(cx + ctx_half, w)
-
     if y1 <= y0 or x1 <= x0:
         return False
-
     upper_patch = pov[y0:y1, x0:x1]
     hsv = cv2.cvtColor(upper_patch, cv2.COLOR_RGB2HSV)
     leaf_mask = _birch_leaf_mask(hsv)
-    leaf_ratio = np.count_nonzero(leaf_mask) / leaf_mask.size
-    return leaf_ratio > leaf_threshold
+    return np.count_nonzero(leaf_mask) / leaf_mask.size > leaf_threshold
 
 
-class PersistentMineWrapper(gym.Wrapper):
-    """
-    Once the agent triggers attack while looking at wood, hold attack
-    continuously until the wood disappears from the center patch (block broken)
-    or a max timeout is reached.
-
-    Key fix: once holding, we require several consecutive frames of
-    "no wood" before releasing — this prevents flickering from slight
-    camera drift mid-swing from causing premature release.
-    """
-
-    CENTER_SIZE    = 32
-    CONTEXT_SIZE   = 96
-    WOOD_THRESHOLD = 0.12   # slightly more lenient to stay locked on
-    LEAF_THRESHOLD = 0.08
-    MAX_HOLD_TICKS = 80     # birch takes ~30 ticks bare-hand; give extra margin
-    RELEASE_GRACE  = 5      # must see "no wood" for this many consecutive ticks to release
-
-    def __init__(self, env):
-        super().__init__(env)
-        self._holding_attack = False
-        self._hold_ticks     = 0
-        self._no_wood_streak = 0
-
-    def reset(self, **kwargs):
-        self._holding_attack = False
-        self._hold_ticks     = 0
-        self._no_wood_streak = 0
-        return self.env.reset(**kwargs)
-
-    def step(self, action):
-        if isinstance(action, dict):
-            action = self._maybe_override_attack(action)
-            obs, reward, done, info = self.env.step(action)
-            pov = obs.get("pov") if isinstance(obs, dict) else None
-            self._update_hold_state(action, pov)
-        else:
-            obs, reward, done, info = self.env.step(action)
-
-        return obs, reward, done, info
-
-    def _is_looking_at_wood(self, pov) -> bool:
-        if pov is None:
-            return False
-        h, w   = pov.shape[:2]
-        cy, cx = h // 2, w // 2
-
-        # Center patch — check for birch wood
-        half   = self.CENTER_SIZE // 2
-        center = pov[cy - half:cy + half, cx - half:cx + half]
-        hsv    = cv2.cvtColor(center, cv2.COLOR_RGB2HSV)
-        wood_mask  = _birch_wood_mask(hsv)
-        wood_ratio = np.count_nonzero(wood_mask) / wood_mask.size
-
-        leaf_center = _birch_leaf_mask(hsv)
-        crosshair_on_leaves = np.count_nonzero(leaf_center) / leaf_center.size > 0.25
-
-        if crosshair_on_leaves:
-            return False
-
-        # If wood ratio is very high, trust it even without visible leaves
-        # (agent may be face-to-face with trunk, canopy off-screen)
-        if wood_ratio > 0.40:
-            return True
-
-        # Otherwise require leaves above to confirm it's a tree
-        has_leaves = _has_leaves_above(pov, self.CONTEXT_SIZE, self.LEAF_THRESHOLD)
-        return has_leaves and wood_ratio > self.WOOD_THRESHOLD
-
-    def _maybe_override_attack(self, action: dict) -> dict:
-        if self._holding_attack:
-            action = dict(action)
-            action["attack"] = 1
-            # Freeze camera and movement while mining — prevent drifting off target
-            action["camera"] = np.array([0.0, 0.0], dtype=np.float32)
-            action["forward"] = 0
-            action["back"] = 0
-            action["left"] = 0
-            action["right"] = 0
-            action["jump"] = 0
-        return action
-
-    def _update_hold_state(self, action: dict, pov):
-        if not self._holding_attack:
-            if action.get("attack", 0) == 1 and self._is_looking_at_wood(pov):
-                self._holding_attack = True
-                self._hold_ticks     = 1
-                self._no_wood_streak = 0
-                logger.debug("⛏ PersistentMine: started hold")
-        else:
-            self._hold_ticks += 1
-            still_on_wood = self._is_looking_at_wood(pov)
-            timed_out     = self._hold_ticks >= self.MAX_HOLD_TICKS
-
-            if still_on_wood:
-                self._no_wood_streak = 0
+def _is_close_trunk(pov: np.ndarray, center_size: int) -> bool:
+    """Vertical column check — only triggers on nearby trunks."""
+    h, w = pov.shape[:2]
+    cy, cx = h // 2, w // 2
+    half = center_size // 2
+    center = pov[cy - half:cy + half, cx - half:cx + half]
+    hsv = cv2.cvtColor(center, cv2.COLOR_RGB2HSV)
+    wood_mask = _birch_wood_mask(hsv)
+    patch_h = center.shape[0]
+    if patch_h == 0:
+        return False
+    cols_to_check = [center_size // 4, center_size // 2, 3 * center_size // 4]
+    best_run = 0
+    for col in cols_to_check:
+        if col >= wood_mask.shape[1]:
+            continue
+        column = wood_mask[:, col]
+        run = 0
+        max_run = 0
+        for pixel in column:
+            if pixel > 0:
+                run += 1
+                max_run = max(max_run, run)
             else:
-                self._no_wood_streak += 1
+                run = 0
+        best_run = max(best_run, max_run)
+    return best_run / patch_h >= MIN_VERTICAL_FILL
 
-            if self._no_wood_streak >= self.RELEASE_GRACE:
-                logger.debug(f"⛏ PersistentMine: released after {self._hold_ticks} ticks "
-                             f"(wood gone for {self.RELEASE_GRACE} frames)")
-                self._holding_attack = False
-                self._hold_ticks     = 0
-                self._no_wood_streak = 0
-            elif timed_out:
-                logger.debug(f"⛏ PersistentMine: released after timeout ({self.MAX_HOLD_TICKS} ticks)")
-                self._holding_attack = False
-                self._hold_ticks     = 0
-                self._no_wood_streak = 0
+
+def _detect_close_wood(pov: np.ndarray, center_size: int) -> bool:
+    """Return True only if a nearby trunk is in the crosshair."""
+    if pov is None:
+        return False
+    h, w = pov.shape[:2]
+    cy, cx = h // 2, w // 2
+    half = center_size // 2
+    center = pov[cy - half:cy + half, cx - half:cx + half]
+    hsv = cv2.cvtColor(center, cv2.COLOR_RGB2HSV)
+    leaf_center = _birch_leaf_mask(hsv)
+    if np.count_nonzero(leaf_center) / leaf_center.size > 0.25:
+        return False
+    return _is_close_trunk(pov, center_size)
 
 
 class WoodDetectionRewardWrapper(gym.Wrapper):
-    """Visual reward shaping — tuned for birch bark detection.
+    """Simple reward shaping — no movement overrides, just rewards/penalties.
 
-    Uses upper-viewport leaf check to avoid confusing grass with leaves.
+    The agent is free to move however it wants. It gets:
+      +0.30 for attacking a nearby trunk
+      +0.01 for looking at a nearby trunk
+      -0.01 for attacking non-wood
+      -0.001 per step (living cost)
+      -0.10 for looking straight down and attacking (digging)
     """
 
-    CENTER_SIZE  = 32
-    CONTEXT_SIZE = 96
-
-    WOOD_THRESHOLD     = 0.20
-    LEAF_THRESHOLD     = 0.08
-    CENTER_LEAF_THRESH = 0.25
+    CENTER_SIZE  = 28
 
     LOOK_REWARD         =  0.01
     MINE_REWARD         =  0.30
     DIG_PENALTY         = -0.10
-    LEAF_ATTACK_PENALTY = -0.05
     RANDOM_ATK_PENALTY  = -0.01
     STEP_PENALTY        = -0.001
 
     def __init__(self, env):
         super().__init__(env)
-        self._prev_wood_ratio = 0.0
 
     def reset(self, **kwargs):
-        self._prev_wood_ratio = 0.0
         return self.env.reset(**kwargs)
 
     def step(self, action):
@@ -307,78 +219,32 @@ class WoodDetectionRewardWrapper(gym.Wrapper):
         reward += self.STEP_PENALTY
 
         pov = obs["pov"] if isinstance(obs, dict) else None
-
-        attacking    = isinstance(action, dict) and action.get("attack", 0) == 1
-        moving_fwd   = isinstance(action, dict) and action.get("forward", 0) == 1
-        cam          = action.get("camera", [0.0, 0.0]) if isinstance(action, dict) else [0.0, 0.0]
-        cam_pitch    = float(cam[0]) if hasattr(cam, "__len__") else 0.0
+        attacking = isinstance(action, dict) and action.get("attack", 0) == 1
+        cam = action.get("camera", [0.0, 0.0]) if isinstance(action, dict) else [0.0, 0.0]
+        cam_pitch = float(cam[0]) if hasattr(cam, "__len__") else 0.0
         looking_down = cam_pitch > 15.0
 
         if pov is not None:
-            h, w = pov.shape[:2]
-            cy, cx = h // 2, w // 2
-
-            # Check for leaves ABOVE the crosshair only (not grass)
-            has_leaves = _has_leaves_above(pov, self.CONTEXT_SIZE, self.LEAF_THRESHOLD)
-
-            # Also compute full context leaf ratio for logging
-            ctx_half = self.CONTEXT_SIZE // 2
-            y0, y1 = max(cy - ctx_half, 0), min(cy + ctx_half, h)
-            x0, x1 = max(cx - ctx_half, 0), min(cx + ctx_half, w)
-            ctx_hsv    = cv2.cvtColor(pov[y0:y1, x0:x1], cv2.COLOR_RGB2HSV)
-            leaf_mask  = _birch_leaf_mask(ctx_hsv)
-            leaf_ratio = np.count_nonzero(leaf_mask) / leaf_mask.size
-
-            # Center patch — birch wood
-            half   = self.CENTER_SIZE // 2
-            center = pov[cy - half:cy + half, cx - half:cx + half]
-            hsv    = cv2.cvtColor(center, cv2.COLOR_RGB2HSV)
-
-            wood_mask         = _birch_wood_mask(hsv)
-            wood_ratio        = np.count_nonzero(wood_mask) / wood_mask.size
-            leaf_center_mask  = _birch_leaf_mask(hsv)
-            leaf_center_ratio = np.count_nonzero(leaf_center_mask) / leaf_center_mask.size
-
-            crosshair_on_leaves = leaf_center_ratio > self.CENTER_LEAF_THRESH
-
-            # If wood ratio is very high, trust it without leaf confirmation
-            # (agent may be face-to-face with trunk, canopy off-screen)
-            if crosshair_on_leaves:
-                looking_at_wood = False
-            elif wood_ratio > 0.40:
-                looking_at_wood = True
-            else:
-                looking_at_wood = has_leaves and wood_ratio > self.WOOD_THRESHOLD
+            looking_at_wood = _detect_close_wood(pov, self.CENTER_SIZE)
 
             if looking_at_wood:
                 if attacking:
                     reward += self.MINE_REWARD
-                    logger.info(f"✅ mining birch (wood={wood_ratio:.2f}, leaf={leaf_ratio:.2f}) +{self.MINE_REWARD}")
+                    logger.info(f"✅ mining birch +{self.MINE_REWARD}")
                 else:
                     reward += self.LOOK_REWARD
-                    logger.info(f"👀 looking at birch (wood={wood_ratio:.2f}, leaf={leaf_ratio:.2f}) +{self.LOOK_REWARD}")
-
-                self._prev_wood_ratio = wood_ratio
             else:
-                self._prev_wood_ratio = 0.0
-
                 if attacking:
-                    if crosshair_on_leaves and has_leaves:
-                        reward += self.LEAF_ATTACK_PENALTY
-                        logger.debug(f"🍃 attacking leaves {self.LEAF_ATTACK_PENALTY}")
-                    else:
-                        reward += self.RANDOM_ATK_PENALTY
-                        logger.debug(f"⛏ attacking non-wood {self.RANDOM_ATK_PENALTY}")
+                    reward += self.RANDOM_ATK_PENALTY
 
         if attacking and looking_down:
             reward += self.DIG_PENALTY
-            logger.debug(f"⬇ digging down {self.DIG_PENALTY}")
 
         return obs, reward, done, info
 
 
 class CameraStabilityWrapper(gym.Wrapper):
-    """Penalise large aimless camera movements to stop spinning behaviour."""
+    """Penalise large aimless camera movements to stop spinning."""
 
     def __init__(self, env, spin_threshold: float = 0.5, spin_penalty: float = -0.03):
         super().__init__(env)
@@ -407,7 +273,10 @@ class RenderWrapper(gym.Wrapper):
 
 
 class ActionWrapper(gym.ActionWrapper):
-    """Map a 4-dim vector in [-1, 1] to a MineRL action dict."""
+    """Map a 5-dim vector in [-1, 1] to a MineRL action dict.
+
+    [0] camera pitch, [1] camera yaw, [2] forward, [3] attack, [4] jump
+    """
 
     def __init__(self, env):
         super().__init__(env)
@@ -423,6 +292,7 @@ class ActionWrapper(gym.ActionWrapper):
         ], dtype=np.float32)
         noop["forward"] = int(action[2] > 0)
         noop["attack"]  = int(action[3] > 0)
+        noop["jump"]    = int(action[4] > 0)
         return noop
 
     def reverse_action(self, action):
