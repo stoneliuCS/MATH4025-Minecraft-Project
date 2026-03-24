@@ -146,9 +146,9 @@ class WoodDetectionRewardWrapper(gym.Wrapper):  # pyright: ignore[reportPrivateI
     CONTEXT_SIZE = 96  # wider patch to check for nearby leaves
     WOOD_THRESHOLD = 0.15  # 15% of center pixels must be wood-colored
     LEAF_THRESHOLD = 0.05  # 5% of context pixels must be green (leaves)
-    LOOK_REWARD = 0.01
-    MINE_REWARD = 0.05
-    APPROACH_REWARD = 0.02
+    LOOK_REWARD = 0
+    MINE_REWARD = 0
+    APPROACH_REWARD = 0
 
     def __init__(self, env):
         super().__init__(env)
