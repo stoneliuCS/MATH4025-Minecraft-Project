@@ -204,18 +204,24 @@ def _detect_close_wood(pov: np.ndarray, center_size: int) -> bool:
 class WoodDetectionRewardWrapper(gym.Wrapper):
     CENTER_SIZE = 28
 
-    # Small incentive to face wood — not enough to farm on its own
-    LOOK_REWARD         = 0.02
+    # # Small incentive to face wood — not enough to farm on its own
+    # LOOK_REWARD         = 0.02
 
-    # Small baseline reward every tick the agent attacks wood.
-    # Streak bonus stacks on top after STREAK_START consecutive ticks.
-    MINE_REWARD         = 0.05
-    STEADY_AIM_BONUS    = 0.05   # extra per tick when camera is steady during streak
+    # # Small baseline reward every tick the agent attacks wood.
+    # # Streak bonus stacks on top after STREAK_START consecutive ticks.
+    # MINE_REWARD         = 0.05
+    # STEADY_AIM_BONUS    = 0.05   # extra per tick when camera is steady during streak
 
-    # Collection reward lives in LogRewardWrapper (4.0). This is the info-key
-    # top-up for any logs WoodDetectionRewardWrapper notices via info — kept
-    # at 0 to avoid double-counting now that LogRewardWrapper owns that signal.
-    LOG_COLLECT_REWARD  = 0.0
+    # # Collection reward lives in LogRewardWrapper (4.0). This is the info-key
+    # # top-up for any logs WoodDetectionRewardWrapper notices via info — kept
+    # # at 0 to avoid double-counting now that LogRewardWrapper owns that signal.
+    # LOG_COLLECT_REWARD  = 0.0
+    LOOK_REWARD = 0.0
+    MINE_REWARD = 0.02
+    STREAK_START = 8
+    STREAK_BONUS_PER_TICK = 0.06
+    STREAK_MAX_BONUS = 0.3
+    STEADY_AIM_BONUS = 0.05
 
     def __init__(self, env):
         super().__init__(env)
@@ -237,6 +243,9 @@ class WoodDetectionRewardWrapper(gym.Wrapper):
 
         if pov is not None:
             looking_at_wood = _detect_close_wood(pov, self.CENTER_SIZE)
+
+            if attacking and self._consecutive_mine > 20 and not looking_at_wood:
+                reward -= 0.1
 
             if looking_at_wood:
                 if attacking:
@@ -296,32 +305,54 @@ class CameraStabilityWrapper(gym.Wrapper):
         return obs, reward, done, info
 
 
-class StickyAttackWrapper(gym.Wrapper):
-    """Once attack fires, hold it for `sticky_ticks` steps.
+class PersistentMineWrapper(gym.Wrapper):
+    CENTER_SIZE = 28
+    HOLD_TICKS = 60
+    RELEASE_GRACE = 4
 
-    Operates on MineRL dict actions — must sit below ActionWrapper in the
-    wrapper stack (i.e. closer to the base env), where actions are dicts.
-    """
-
-    def __init__(self, env, sticky_ticks: int = 10):
+    def __init__(self, env):
         super().__init__(env)
-        self.sticky_ticks = sticky_ticks
-        self._attack_counter = 0
+        self._holding = False
+        self._ticks = 0
+        self._no_wood = 0
 
     def reset(self, **kwargs):
-        self._attack_counter = 0
+        self._holding = False
+        self._ticks = 0
+        self._no_wood = 0
         return self.env.reset(**kwargs)
 
     def step(self, action):
-        if action.get("attack", 0) == 1:
-            self._attack_counter = self.sticky_ticks
-
-        if self._attack_counter > 0:
+        if isinstance(action, dict) and self._holding:
             action["attack"] = 1
-            self._attack_counter -= 1
+            action["camera"] = np.array([0.0, 0.0], dtype=np.float32)
+            action["forward"] = 0
+            action["jump"] = 0
 
-        return self.env.step(action)
+        obs, reward, done, info = self.env.step(action)
+        pov = obs.get("pov") if isinstance(obs, dict) else None
 
+        if isinstance(action, dict):
+            if not self._holding:
+                if action.get("attack", 0) == 1 and _detect_close_wood(pov, self.CENTER_SIZE):
+                    self._holding = True
+                    self._ticks = 1
+                    self._no_wood = 0
+            else:
+                self._ticks += 1
+                still_wood = _detect_close_wood(pov, self.CENTER_SIZE)
+
+                if still_wood:
+                    self._no_wood = 0
+                else:
+                    self._no_wood += 1
+
+                if self._no_wood >= self.RELEASE_GRACE or self._ticks >= self.HOLD_TICKS:
+                    self._holding = False
+                    self._ticks = 0
+                    self._no_wood = 0
+
+        return obs, reward, done, info
 
 class RenderWrapper(gym.Wrapper):
     def step(self, action):

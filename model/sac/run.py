@@ -6,7 +6,7 @@ from environment.wood_environment import (
     GatherWoodEnvironment,
     LogRewardWrapper,
     ResetRetryWrapper,
-    StickyAttackWrapper,
+    PersistentMineWrapper,   # ✅ NEW
     WoodDetectionRewardWrapper,
     CameraStabilityWrapper,
     PovImageWrapper,
@@ -16,7 +16,8 @@ from environment.wood_environment import (
 from model.callbacks import TrainingMetricsCallback
 from model.environment import create_environment
 import minerl.env.comms as _comms
-_comms.MALMO_TIMEOUT = 180  # Increase timeout to handle longer episodes during training
+
+_comms.MALMO_TIMEOUT = 180
 
 logger = logging.getLogger(__name__)
 
@@ -25,8 +26,6 @@ MODEL_PATH      = "artifacts/sac_final.zip"
 
 
 class EpisodeLogCallback(BaseCallback):
-    """Log per-episode stats and attack% to help diagnose stuck policies."""
-
     def __init__(self, verbose=0):
         super().__init__(verbose)
         self._attack_ticks = 0
@@ -63,18 +62,18 @@ def run(render: bool = True, small_training: bool = False):
     GatherWoodEnvironment().register()
     env = create_environment(env_name, interactive=render)
 
-    # Wrapper stack — order matters
-    env = LogRewardWrapper(env)                        # +1 per log pickup
-    env = WoodDetectionRewardWrapper(env)              # visual shaping
-    env = CameraStabilityWrapper(env,                  # anti-spin
-              spin_threshold=0.5, spin_penalty=-0.03)
-    env = StickyAttackWrapper(env, sticky_ticks=8)
+    # ✅ FIXED WRAPPER STACK
+    env = LogRewardWrapper(env)
+    env = PersistentMineWrapper(env)     # 🔥 CRITICAL FIX
+    env = WoodDetectionRewardWrapper(env)
+    env = CameraStabilityWrapper(env)
+
     if render:
         env = RenderWrapper(env)
-    env = PovImageWrapper(env)    # dict → (C,H,W) uint8
-    env = ActionWrapper(env)      # 5-dim float → MineRL dict
-    env = ResetRetryWrapper(env, max_retries=5, retry_delay=5.0)
 
+    env = PovImageWrapper(env)
+    env = ActionWrapper(env)
+    env = ResetRetryWrapper(env)
 
     os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
 
@@ -102,7 +101,7 @@ def run(render: bool = True, small_training: bool = False):
         gradient_steps=8,
         learning_starts=learning_starts,
         ent_coef="auto",
-        target_entropy=-5.0,
+        target_entropy=-3.0,   # ✅ less random than -5
     )
 
     checkpoint_cb = CheckpointCallback(
@@ -110,6 +109,7 @@ def run(render: bool = True, small_training: bool = False):
         save_path=CHECKPOINT_PATH,
         name_prefix="sac_wood",
     )
+
     episode_cb = EpisodeLogCallback()
     metrics_cb = TrainingMetricsCallback(save_dir="artifacts", save_freq=5, verbose=1)
 

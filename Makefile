@@ -110,7 +110,7 @@ RENDER ?=
 
 sac: env
 	@JAVA_HOME="$(JAVA_HOME_8)" PATH="$(JAVA_HOME_8)/bin:$$PATH" \
-	"$(VENV_DIR)/bin/python" -m model.main --mode sac --render $(if $(RENDER),--render,)
+	"$(VENV_DIR)/bin/python" -m model.main --mode sac $(if $(RENDER),--render,)
 
 sac-eval: env
 	@if [ ! -f "$(PROJECT_ROOT)/artifacts/sac_final.zip" ]; then \
@@ -122,7 +122,7 @@ sac-eval: env
 	"$(VENV_DIR)/bin/python" -m model.sac.evaluate
 
 sac-checkpoint: env
-	@if [ ! -f "$(PROJECT_ROOT)/artifacts/sac/sac_wood_20000_steps.zip" ]; then \
+	@if [ ! -f "$(PROJECT_ROOT)/artifacts/sac/sac_wood_30000_steps.zip" ]; then \
 		echo "Error: No saved SAC model found at artifacts/sac_final.zip"; \
 		echo "Run 'make sac' first to train the SAC agent."; \
 		exit 1; \
