@@ -57,12 +57,12 @@ def run(render: bool = False, checkpoint: str | None = None, pretrained: str | N
             verbose=1,
             buffer_size=100_000,
             batch_size=128,
-            learning_rate=1e-4,
+            learning_rate=1e-5,
             gamma=0.99,
             tau=5e-3,
             train_freq=4,
             gradient_steps=1,
-            learning_starts=1000,
+            learning_starts=5000,
             replay_buffer_class=NStepReplayBuffer,
             replay_buffer_kwargs={"n_steps": 50, "gamma": 0.99},
         )
@@ -76,9 +76,6 @@ def run(render: bool = False, checkpoint: str | None = None, pretrained: str | N
     reward_cb = RewardPlotCallback(output_path=os.path.join(checkpoint_out, "reward_plot.png"))
 
     callbacks = [checkpoint_cb, reward_cb]
-    if pretrained:
-        bc_cb = BCRegularizationCallback(pretrained_path=pretrained, lambda_bc=0.5)
-        callbacks.append(bc_cb)
 
     model.learn(
         total_timesteps=timesteps,
