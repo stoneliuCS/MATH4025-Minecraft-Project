@@ -79,6 +79,8 @@ class LogRewardWrapper(gym.Wrapper):  # pyright: ignore[reportPrivateImportUsage
         self._steps = 0
 
     def reset(self, **kwargs):
+        import time
+        time.sleep(2)
         obs = self.env.reset(**kwargs)
         self._prev_logs = self._get_log_count(obs)
         self._steps = 0

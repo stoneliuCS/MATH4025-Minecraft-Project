@@ -63,7 +63,7 @@ def run(render: bool = False, checkpoint: str | None = None, pretrained: str | N
             gradient_steps=1,
             learning_starts=1000,
             replay_buffer_class=NStepReplayBuffer,
-            replay_buffer_kwargs={"n_steps": 25, "gamma": 0.99},
+            replay_buffer_kwargs={"n_steps": 50, "gamma": 0.99},
         )
 
     os.makedirs(checkpoint_out, exist_ok=True)
