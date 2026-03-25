@@ -1,4 +1,5 @@
 import logging
+import os
 import gym
 import numpy as np
 import cv2
@@ -69,10 +70,11 @@ class LogRewardWrapper(gym.Wrapper):  # pyright: ignore[reportPrivateImportUsage
     observation directly and rewards +1 per new log collected.
     """
 
-    def __init__(self, env, reward_per_log: float = 100.0, max_steps: int = 500):
+    def __init__(self, env, reward_per_log: float = 100.0, max_steps: int = 1000, log_dir: str = "artifacts"):
         super().__init__(env)
         self.reward_per_log = reward_per_log
         self.max_steps = max_steps
+        self.log_dir = log_dir
         self._prev_logs = 0
         self._steps = 0
 
@@ -93,7 +95,7 @@ class LogRewardWrapper(gym.Wrapper):  # pyright: ignore[reportPrivateImportUsage
             logger.info(
                 f"Collected wood! logs: {cur_logs} (+{log_diff}) reward: {reward}"
             )
-            with open("artifacts/reward_log.txt", "a") as f:
+            with open(os.path.join(self.log_dir, "reward_log.txt"), "a") as f:
                 f.write(f"logs: {cur_logs} (+{log_diff}) reward: {reward}\n")
         elif self._steps >= self.max_steps:
             done = True

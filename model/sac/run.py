@@ -32,7 +32,7 @@ def run(render: bool = False, checkpoint: str | None = None, pretrained: str | N
     env = create_environment(env_name, interactive=True)
 
     # Wrapper stack: raw env -> reward -> sticky attack -> wood detection -> render -> image obs -> action mapping
-    env = LogRewardWrapper(env)
+    env = LogRewardWrapper(env, log_dir=checkpoint_out)
     env = StickyAttackWrapper(env, sticky_ticks=15)
     env = WoodDetectionRewardWrapper(env)
     if render:
