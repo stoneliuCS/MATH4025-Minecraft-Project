@@ -6,6 +6,7 @@ from stable_baselines3.common.callbacks import CallbackList, CheckpointCallback
 
 from model.sac.callbacks import RewardPlotCallback
 from model.sac.replay_buffer import NStepReplayBuffer
+from model.sac.bc_callback import BCRegularizationCallback
 
 from environment.wood_environment import (
     GatherWoodEnvironment,
@@ -74,9 +75,14 @@ def run(render: bool = False, checkpoint: str | None = None, pretrained: str | N
     )
     reward_cb = RewardPlotCallback(output_path=os.path.join(checkpoint_out, "reward_plot.png"))
 
+    callbacks = [checkpoint_cb, reward_cb]
+    if pretrained:
+        bc_cb = BCRegularizationCallback(pretrained_path=pretrained, lambda_bc=0.5)
+        callbacks.append(bc_cb)
+
     model.learn(
         total_timesteps=timesteps,
-        callback=CallbackList([checkpoint_cb, reward_cb]),
+        callback=CallbackList(callbacks),
         log_interval=10,
         reset_num_timesteps=checkpoint is None,
     )
