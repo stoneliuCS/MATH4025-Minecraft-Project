@@ -27,6 +27,7 @@ class RewardPlotCallback(BaseCallback):
             if ep is not None:
                 self.episode_rewards.append(float(ep["r"]))
                 self.episode_timesteps.append(self.num_timesteps)
+                self._save_rewards()
         return True
 
     def _save_rewards(self) -> None:
