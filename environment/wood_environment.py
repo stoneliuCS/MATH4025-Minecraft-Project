@@ -85,6 +85,7 @@ class LogRewardWrapper(gym.Wrapper):  # pyright: ignore[reportPrivateImportUsage
         log_diff = cur_logs - self._prev_logs
         if log_diff > 0:
             reward += log_diff * self.reward_per_log
+            done = True
             logger.info(
                 f"Collected wood! logs: {cur_logs} (+{log_diff}) reward: {reward}"
             )
