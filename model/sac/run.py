@@ -60,7 +60,7 @@ def run(render: bool = False, checkpoint: str | None = None, pretrained: str | N
             gamma=0.99,
             tau=5e-3,
             train_freq=4,
-            gradient_steps=4,
+            gradient_steps=1,
             learning_starts=1000,
             replay_buffer_class=NStepReplayBuffer,
             replay_buffer_kwargs={"n_steps": 25, "gamma": 0.99},
