@@ -69,18 +69,22 @@ class LogRewardWrapper(gym.Wrapper):  # pyright: ignore[reportPrivateImportUsage
     observation directly and rewards +1 per new log collected.
     """
 
-    def __init__(self, env, reward_per_log: float = 100.0):
+    def __init__(self, env, reward_per_log: float = 100.0, max_steps: int = 500):
         super().__init__(env)
         self.reward_per_log = reward_per_log
+        self.max_steps = max_steps
         self._prev_logs = 0
+        self._steps = 0
 
     def reset(self, **kwargs):
         obs = self.env.reset(**kwargs)
         self._prev_logs = self._get_log_count(obs)
+        self._steps = 0
         return obs
 
     def step(self, action):
         obs, reward, done, info = self.env.step(action)
+        self._steps += 1
         cur_logs = self._get_log_count(obs)
         log_diff = cur_logs - self._prev_logs
         if log_diff > 0:
@@ -91,6 +95,9 @@ class LogRewardWrapper(gym.Wrapper):  # pyright: ignore[reportPrivateImportUsage
             )
             with open("artifacts/reward_log.txt", "a") as f:
                 f.write(f"logs: {cur_logs} (+{log_diff}) reward: {reward}\n")
+        elif self._steps >= self.max_steps:
+            done = True
+            logger.info(f"Episode timeout after {self.max_steps} steps — no log collected")
         self._prev_logs = cur_logs
         return obs, reward, done, info
 
