@@ -109,14 +109,18 @@ dqn-eval: env
 
 RENDER ?=
 PRETRAINED ?=
+CHECKPOINT ?=
 TIMESTEPS ?=
+CHECKPOINT_OUT ?=
 
 sac: env
 	@JAVA_HOME="$(JAVA_HOME_8)" PATH="$(JAVA_HOME_8)/bin:$$PATH" \
 	"$(VENV_DIR)/bin/python" -m model.main --mode sac \
 	  $(if $(RENDER),--render,) \
 	  $(if $(PRETRAINED),--pretrained "$(PRETRAINED)",) \
-	  $(if $(TIMESTEPS),--timesteps "$(TIMESTEPS)",)
+	  $(if $(CHECKPOINT),--checkpoint "$(CHECKPOINT)",) \
+	  $(if $(TIMESTEPS),--timesteps "$(TIMESTEPS)",) \
+	  $(if $(CHECKPOINT_OUT),--checkpoint-out "$(CHECKPOINT_OUT)",)
 
 DATA_DIR ?= data
 EPOCHS ?= 5
@@ -127,13 +131,15 @@ sac-pretrain:
 
 CHECKPOINT_DIR ?= artifacts/sac
 EVAL_EPISODES ?= 3
+EVAL_CHECKPOINT ?=
 
 eval-checkpoints: env
 	@JAVA_HOME="$(JAVA_HOME_8)" PATH="$(JAVA_HOME_8)/bin:$$PATH" \
 	"$(VENV_DIR)/bin/python" -m model.sac.eval_checkpoints \
-	  --checkpoint-dir "$(CHECKPOINT_DIR)" \
+	  $(if $(EVAL_CHECKPOINT),--checkpoint "$(EVAL_CHECKPOINT)",--checkpoint-dir "$(CHECKPOINT_DIR)") \
 	  --episodes "$(EVAL_EPISODES)" \
-	  --out artifacts
+	  --out artifacts \
+	  $(if $(RENDER),--render,)
 
 
 interactor: env

@@ -240,7 +240,7 @@ class ActionWrapper(gym.ActionWrapper):  # pyright: ignore[reportPrivateImportUs
         noop = self.env.action_space.noop()  # pyright: ignore[reportAttributeAccessIssue]
         noop["camera"] = np.array(
             [
-                action[0] * CAMERA_MAX_ANGLE,
+                np.clip(action[0], -0.3, 1.0) * CAMERA_MAX_ANGLE,  # limit upward look to 30%
                 action[1] * CAMERA_MAX_ANGLE,
             ],
             dtype=np.float32,
