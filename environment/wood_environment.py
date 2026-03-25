@@ -123,7 +123,7 @@ class StickyAttackWrapper(gym.Wrapper):  # pyright: ignore[reportPrivateImportUs
     Other actions (movement) update normally every tick.
     """
 
-    def __init__(self, env, sticky_ticks: int = 15):
+    def __init__(self, env, sticky_ticks: int = 30):
         super().__init__(env)
         self.sticky_ticks = sticky_ticks
         self._attack_counter = 0
@@ -159,7 +159,7 @@ class WoodDetectionRewardWrapper(gym.Wrapper):  # pyright: ignore[reportPrivateI
     WOOD_THRESHOLD = 0.15  # 15% of center pixels must be wood-colored
     LEAF_THRESHOLD = 0.05  # 5% of context pixels must be green (leaves)
     LOOK_REWARD = 0
-    MINE_REWARD = 0
+    MINE_REWARD = 0.5
     APPROACH_REWARD = 0
 
     def __init__(self, env):
