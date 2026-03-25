@@ -56,7 +56,7 @@ def run(render: bool = False, checkpoint: str | None = None, pretrained: str | N
             verbose=1,
             buffer_size=100_000,
             batch_size=128,
-            learning_rate=3e-4,
+            learning_rate=1e-4,
             gamma=0.99,
             tau=5e-3,
             train_freq=4,
