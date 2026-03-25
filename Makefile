@@ -110,7 +110,7 @@ RENDER ?=
 
 sac: env
 	@JAVA_HOME="$(JAVA_HOME_8)" PATH="$(JAVA_HOME_8)/bin:$$PATH" \
-	"$(VENV_DIR)/bin/python" -m model.main --mode sac $(if $(RENDER),--render,)
+	"$(VENV_DIR)/bin/python" -m model.main --mode sac --render $(if $(RENDER),--render,)
 
 sac-eval: env
 	@if [ ! -f "$(PROJECT_ROOT)/artifacts/sac_final.zip" ]; then \
