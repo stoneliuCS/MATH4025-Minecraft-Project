@@ -3,6 +3,8 @@ from stable_baselines3 import SAC
 from environment.wood_environment import (
     GatherWoodEnvironment,
     LogRewardWrapper,
+    ResetRetryWrapper,
+    StickyAttackWrapper,
     WoodDetectionRewardWrapper,
     CameraStabilityWrapper,
     PovImageWrapper,
@@ -26,10 +28,13 @@ def evaluate(n_episodes: int = 5, render: bool = True):
     env = WoodDetectionRewardWrapper(env)             # visual shaping
     env = CameraStabilityWrapper(env,                 # anti-spin
               spin_threshold=0.5, spin_penalty=-0.03)
+    env = StickyAttackWrapper(env, sticky_ticks=8)
     if render:
         env = RenderWrapper(env)
     env = PovImageWrapper(env)                        # dict → (C,H,W) uint8
     env = ActionWrapper(env)                          # 5-dim float → MineRL dict
+    env = ResetRetryWrapper(env, max_retries=5, retry_delay=5.0)
+
 
     model = SAC.load(MODEL_PATH, env=env)
 

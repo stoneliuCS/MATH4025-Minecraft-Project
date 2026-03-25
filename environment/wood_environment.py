@@ -12,10 +12,10 @@ import minerl.herobraine.hero.handlers as handlers
 from typing_extensions import override
 
 
-MAX_EPISODE_STEPS = 500          # ← shortened from 2000
+MAX_EPISODE_STEPS = 500
 MAX_REWARD_THRESHOLD = 100
 FRAME_SIZE = 64
-CAMERA_MAX_ANGLE = 5.0           # ← reduced from 10.0
+CAMERA_MAX_ANGLE = 5.0
 ACTION_DIM = 5  # camera_pitch, camera_yaw, forward, attack, jump
 LOG_ITEMS = ["oak_log", "spruce_log", "birch_log", "jungle_log", "acacia_log", "dark_oak_log"]
 
@@ -29,8 +29,12 @@ BIRCH_STRIPE_HSV_HIGH = np.array([180, 50,  130])
 BIRCH_LEAF_HSV_LOW  = np.array([30,  50,  80])
 BIRCH_LEAF_HSV_HIGH = np.array([55, 220, 230])
 
-# Nearby trunk must have a vertical column filling this much of the patch
 MIN_VERTICAL_FILL = 0.40
+
+# ── Streak bonus config ───────────────────────────────────────────────
+STREAK_START        = 5    # ticks before any bonus kicks in
+STREAK_BONUS_PER_TICK = 0.04  # reward per tick after STREAK_START
+STREAK_MAX_BONUS    = 0.3  # cap per tick so it doesn't dominate
 
 
 class PovImageWrapper(gym.ObservationWrapper):
@@ -59,7 +63,9 @@ class PovImageWrapper(gym.ObservationWrapper):
 
 
 class LogRewardWrapper(gym.Wrapper):
-    """Primary reward: +1 per log collected, -0.03 per leaf/sapling picked up."""
+    """Primary reward: +4 per log collected, -0.03 per leaf/sapling picked up.
+    Also writes logs_collected into info so downstream wrappers can read it.
+    """
 
     LEAF_ITEMS = [
         "oak_leaves", "spruce_leaves", "birch_leaves",
@@ -68,17 +74,19 @@ class LogRewardWrapper(gym.Wrapper):
         "jungle_sapling", "acacia_sapling", "dark_oak_sapling",
     ]
 
-    def __init__(self, env, reward_per_log: float = 1.0, leaf_penalty: float = -0.03):
+    def __init__(self, env, reward_per_log: float = 5.0, leaf_penalty: float = -0.03):
         super().__init__(env)
         self.reward_per_log = reward_per_log
         self.leaf_penalty = leaf_penalty
         self._prev_logs = 0
         self._prev_leaves = 0
+        self._total_logs = 0
 
     def reset(self, **kwargs):
         obs = self.env.reset(**kwargs)
         self._prev_logs = self._get_log_count(obs)
         self._prev_leaves = self._get_leaf_count(obs)
+        self._total_logs = 0
         return obs
 
     def step(self, action):
@@ -88,10 +96,14 @@ class LogRewardWrapper(gym.Wrapper):
         log_diff = cur_logs - self._prev_logs
         if log_diff > 0:
             reward += log_diff * self.reward_per_log
+            self._total_logs += log_diff
             logger.info(f"🪵 Collected log! total={cur_logs} (+{log_diff})")
             with open("artifacts/reward_log.txt", "a") as f:
                 f.write(f"logs: {cur_logs} (+{log_diff}) reward: {reward}\n")
         self._prev_logs = cur_logs
+
+        # ✅ Write into info so WoodDetectionRewardWrapper can read it
+        info["logs_collected"] = self._total_logs
 
         cur_leaves = self._get_leaf_count(obs)
         leaf_diff = cur_leaves - self._prev_leaves
@@ -174,94 +186,90 @@ def _is_close_trunk(pov: np.ndarray, center_size: int) -> bool:
 
 
 def _detect_close_wood(pov: np.ndarray, center_size: int) -> bool:
-    """Return True only if a nearby trunk is in the crosshair."""
+    """Simple, robust detection: just check if enough wood-colored pixels exist."""
     if pov is None:
         return False
+
     h, w = pov.shape[:2]
     cy, cx = h // 2, w // 2
     half = center_size // 2
     center = pov[cy - half:cy + half, cx - half:cx + half]
+
     hsv = cv2.cvtColor(center, cv2.COLOR_RGB2HSV)
-    leaf_center = _birch_leaf_mask(hsv)
-    if np.count_nonzero(leaf_center) / leaf_center.size > 0.25:
-        return False
-    return _is_close_trunk(pov, center_size)
+    wood_mask = cv2.inRange(hsv, BIRCH_WOOD_HSV_LOW, BIRCH_WOOD_HSV_HIGH)
+
+    return np.mean(wood_mask > 0) > 0.1
 
 
 class WoodDetectionRewardWrapper(gym.Wrapper):
-    """Reward shaping that strongly incentivises sustained mining.
+    CENTER_SIZE = 28
 
-    The agent gets:
-      +0.30 × multiplier for attacking a nearby trunk (multiplier grows
-             with consecutive mine ticks, up to 3×)
-      +0.05 for keeping camera still while attacking wood
-      +0.01 for looking at a nearby trunk (without attacking)
-      -0.01 for attacking non-wood
-      -0.001 per step (living cost)
-      -0.10 for looking straight down and attacking (digging)
-    """
+    # Small incentive to face wood — not enough to farm on its own
+    LOOK_REWARD         = 0.02
 
-    CENTER_SIZE  = 28
+    # Small baseline reward every tick the agent attacks wood.
+    # Streak bonus stacks on top after STREAK_START consecutive ticks.
+    MINE_REWARD         = 0.05
+    STEADY_AIM_BONUS    = 0.05   # extra per tick when camera is steady during streak
 
-    LOOK_REWARD         =  0.01
-    MINE_REWARD         =  0.30
-    STEADY_AIM_BONUS    =  0.05
-    DIG_PENALTY         = -0.10
-    RANDOM_ATK_PENALTY  = -0.01
-    STEP_PENALTY        = -0.001
+    # Collection reward lives in LogRewardWrapper (4.0). This is the info-key
+    # top-up for any logs WoodDetectionRewardWrapper notices via info — kept
+    # at 0 to avoid double-counting now that LogRewardWrapper owns that signal.
+    LOG_COLLECT_REWARD  = 0.0
 
     def __init__(self, env):
         super().__init__(env)
         self._consecutive_mine = 0
+        self._last_logs_collected = 0
 
     def reset(self, **kwargs):
         self._consecutive_mine = 0
+        self._last_logs_collected = 0
         return self.env.reset(**kwargs)
 
     def step(self, action):
         obs, reward, done, info = self.env.step(action)
 
-        reward += self.STEP_PENALTY
-
-        pov = obs["pov"] if isinstance(obs, dict) else None
+        pov = obs.get("pov") if isinstance(obs, dict) else None
         attacking = isinstance(action, dict) and action.get("attack", 0) == 1
         cam = action.get("camera", [0.0, 0.0]) if isinstance(action, dict) else [0.0, 0.0]
-        cam_pitch = float(cam[0]) if hasattr(cam, "__len__") else 0.0
-        cam_yaw   = float(cam[1]) if hasattr(cam, "__len__") else 0.0
-        looking_down = cam_pitch > 15.0
-        cam_magnitude = (cam_pitch ** 2 + cam_yaw ** 2) ** 0.5
+        cam_mag = (float(cam[0]) ** 2 + float(cam[1]) ** 2) ** 0.5
 
         if pov is not None:
             looking_at_wood = _detect_close_wood(pov, self.CENTER_SIZE)
-            logger.debug(f"looking_at_wood={looking_at_wood} attacking={attacking}")
 
             if looking_at_wood:
                 if attacking:
-                    # ── Sustained mining bonus ──────────────────────
                     self._consecutive_mine += 1
-                    multiplier = min(self._consecutive_mine / 10.0, 3.0)
-                    reward += self.MINE_REWARD * multiplier
-                    # ── Steady aim bonus ────────────────────────────
-                    if cam_magnitude < 1.0:
-                        reward += self.STEADY_AIM_BONUS
-                    if self._consecutive_mine % 10 == 0:
-                        logger.info(
-                            f"⛏️  sustained mine tick={self._consecutive_mine} "
-                            f"multiplier={multiplier:.1f}"
+
+                    # Flat reward every attack-on-wood tick.
+                    reward += self.MINE_REWARD
+
+                    # Streak bonus stacks on top after STREAK_START ticks,
+                    # capped so it can never dwarf actual log collection (4.0).
+                    if self._consecutive_mine > STREAK_START:
+                        bonus = min(
+                            STREAK_BONUS_PER_TICK * (self._consecutive_mine - STREAK_START),
+                            STREAK_MAX_BONUS,
                         )
+                        reward += bonus
+                        if cam_mag < 1.0:
+                            reward += self.STEADY_AIM_BONUS
                 else:
-                    self._consecutive_mine = 0
+                    # Reward for facing wood without attacking — tiny,
+                    # just enough to help the agent orient toward trees.
                     reward += self.LOOK_REWARD
+                    self._consecutive_mine = 0
             else:
                 self._consecutive_mine = 0
-                if attacking:
-                    reward += self.RANDOM_ATK_PENALTY
 
-        if attacking and looking_down:
-            reward += self.DIG_PENALTY
+        # ✅ info["logs_collected"] is now set upstream by LogRewardWrapper.
+        # WoodDetectionRewardWrapper no longer adds its own collection reward
+        # to avoid double-counting. We just track the key for info purposes.
+        current_logs = info.get("logs_collected", 0)
+        self._last_logs_collected = current_logs
 
         info["mining_ticks"] = self._consecutive_mine
-
         return obs, reward, done, info
 
 
@@ -320,6 +328,36 @@ class RenderWrapper(gym.Wrapper):
         self.env.render()
         return self.env.step(action)
 
+class ResetRetryWrapper(gym.Wrapper):
+    """Retry reset() on TimeoutError/OSError from MineRL's Malmo socket.
+ 
+    The Minecraft Java process occasionally takes longer than the default
+    socket timeout to load a world zip, causing a TimeoutError mid-reset.
+    This wrapper catches that, waits for the underlying process to fully
+    die, and retries up to `max_retries` times before re-raising.
+    """
+ 
+    def __init__(self, env, max_retries: int = 5, retry_delay: float = 5.0):
+        super().__init__(env)
+        self.max_retries = max_retries
+        self.retry_delay = retry_delay
+ 
+    def reset(self, **kwargs):
+        import time
+        last_exc = None
+        for attempt in range(1, self.max_retries + 1):
+            try:
+                return self.env.reset(**kwargs)
+            except (TimeoutError, OSError, ConnectionResetError) as e:
+                last_exc = e
+                logger.warning(
+                    f"⚠️  Reset attempt {attempt}/{self.max_retries} failed "
+                    f"({type(e).__name__}: {e}). Retrying in {self.retry_delay}s…"
+                )
+                time.sleep(self.retry_delay)
+        raise RuntimeError(
+            f"Env reset failed after {self.max_retries} attempts."
+        ) from last_exc
 
 class ActionWrapper(gym.ActionWrapper):
     """Map a 5-dim vector in [-1, 1] to a MineRL action dict.

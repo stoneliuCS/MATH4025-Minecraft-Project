@@ -5,6 +5,8 @@ from stable_baselines3.common.callbacks import CheckpointCallback, BaseCallback
 from environment.wood_environment import (
     GatherWoodEnvironment,
     LogRewardWrapper,
+    ResetRetryWrapper,
+    StickyAttackWrapper,
     WoodDetectionRewardWrapper,
     CameraStabilityWrapper,
     PovImageWrapper,
@@ -13,6 +15,8 @@ from environment.wood_environment import (
 )
 from model.callbacks import TrainingMetricsCallback
 from model.environment import create_environment
+import minerl.env.comms as _comms
+_comms.MALMO_TIMEOUT = 180  # Increase timeout to handle longer episodes during training
 
 logger = logging.getLogger(__name__)
 
@@ -64,10 +68,13 @@ def run(render: bool = True, small_training: bool = False):
     env = WoodDetectionRewardWrapper(env)              # visual shaping
     env = CameraStabilityWrapper(env,                  # anti-spin
               spin_threshold=0.5, spin_penalty=-0.03)
+    env = StickyAttackWrapper(env, sticky_ticks=8)
     if render:
         env = RenderWrapper(env)
     env = PovImageWrapper(env)    # dict → (C,H,W) uint8
     env = ActionWrapper(env)      # 5-dim float → MineRL dict
+    env = ResetRetryWrapper(env, max_retries=5, retry_delay=5.0)
+
 
     os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
 
@@ -88,14 +95,14 @@ def run(render: bool = True, small_training: bool = False):
         verbose=1,
         buffer_size=buffer_size,
         batch_size=256,
-        learning_rate=1e-4,
+        learning_rate=3e-4,
         gamma=0.99,
-        tau=5e-3,
-        train_freq=8,
-        gradient_steps=4,
+        tau=0.005,
+        train_freq=16,
+        gradient_steps=8,
         learning_starts=learning_starts,
         ent_coef="auto",
-        target_entropy=-2.0,
+        target_entropy=-5.0,
     )
 
     checkpoint_cb = CheckpointCallback(
