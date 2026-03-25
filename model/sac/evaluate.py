@@ -3,7 +3,6 @@ from stable_baselines3 import SAC
 from environment.wood_environment import (
     GatherWoodEnvironment,
     LogRewardWrapper,
-    PersistentMineWrapper,
     WoodDetectionRewardWrapper,
     CameraStabilityWrapper,
     PovImageWrapper,
@@ -13,23 +12,24 @@ from environment.wood_environment import (
 from model.environment import create_environment
 
 logger = logging.getLogger(__name__)
-MODEL_PATH = "artifacts/sac_final.zip"
+# SB3 appends .zip automatically — do NOT include the extension here
+MODEL_PATH = "artifacts/sac/sac_wood_30000_steps"
 
 
-def evaluate(n_episodes: int = 5):
+def evaluate(n_episodes: int = 5, render: bool = True):
     env_name = "GatherWood-v0"
     GatherWoodEnvironment().register()
+    env = create_environment(env_name, interactive=render)
 
-    env = create_environment(env_name, interactive=True)
-
-    # Must match the wrapper stack used in training exactly
-    env = LogRewardWrapper(env)
-    env = PersistentMineWrapper(env)
-    env = WoodDetectionRewardWrapper(env)
-    env = CameraStabilityWrapper(env, spin_threshold=0.5, spin_penalty=-0.03)
-    env = RenderWrapper(env)
-    env = PovImageWrapper(env)
-    env = ActionWrapper(env)
+    # Wrapper stack — must match run.py exactly
+    env = LogRewardWrapper(env)                       # +1 per log pickup
+    env = WoodDetectionRewardWrapper(env)             # visual shaping
+    env = CameraStabilityWrapper(env,                 # anti-spin
+              spin_threshold=0.5, spin_penalty=-0.03)
+    if render:
+        env = RenderWrapper(env)
+    env = PovImageWrapper(env)                        # dict → (C,H,W) uint8
+    env = ActionWrapper(env)                          # 5-dim float → MineRL dict
 
     model = SAC.load(MODEL_PATH, env=env)
 

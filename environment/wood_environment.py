@@ -205,7 +205,7 @@ class WoodDetectionRewardWrapper(gym.Wrapper):
 
     LOOK_REWARD         =  0.01
     MINE_REWARD         =  0.30
-    STEADY_AIM_BONUS    =  0.05   # ← NEW: reward for holding camera still while mining
+    STEADY_AIM_BONUS    =  0.05
     DIG_PENALTY         = -0.10
     RANDOM_ATK_PENALTY  = -0.01
     STEP_PENALTY        = -0.001
@@ -233,6 +233,7 @@ class WoodDetectionRewardWrapper(gym.Wrapper):
 
         if pov is not None:
             looking_at_wood = _detect_close_wood(pov, self.CENTER_SIZE)
+            logger.debug(f"looking_at_wood={looking_at_wood} attacking={attacking}")
 
             if looking_at_wood:
                 if attacking:
@@ -285,6 +286,33 @@ class CameraStabilityWrapper(gym.Wrapper):
         if cam_mag > self.spin_threshold:
             reward += self.spin_penalty * (cam_mag - self.spin_threshold)
         return obs, reward, done, info
+
+
+class StickyAttackWrapper(gym.Wrapper):
+    """Once attack fires, hold it for `sticky_ticks` steps.
+
+    Operates on MineRL dict actions — must sit below ActionWrapper in the
+    wrapper stack (i.e. closer to the base env), where actions are dicts.
+    """
+
+    def __init__(self, env, sticky_ticks: int = 10):
+        super().__init__(env)
+        self.sticky_ticks = sticky_ticks
+        self._attack_counter = 0
+
+    def reset(self, **kwargs):
+        self._attack_counter = 0
+        return self.env.reset(**kwargs)
+
+    def step(self, action):
+        if action.get("attack", 0) == 1:
+            self._attack_counter = self.sticky_ticks
+
+        if self._attack_counter > 0:
+            action["attack"] = 1
+            self._attack_counter -= 1
+
+        return self.env.step(action)
 
 
 class RenderWrapper(gym.Wrapper):
@@ -341,6 +369,9 @@ class GatherWoodEnvironment(HumanControlEnvSpec):
         world_path = os.path.join(os.path.dirname(__file__), "worlds", "birch_trees.zip")
         return [
             handlers.LoadWorldAgentStart(world_path),
+            handlers.SimpleInventoryAgentStart([
+                {"type": "diamond_axe", "quantity": 1},
+            ]),
             handlers.GammaSetting(2.0),
             handlers.FOVSetting(70.0),
             handlers.FakeCursorSize(16),
