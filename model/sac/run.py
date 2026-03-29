@@ -26,7 +26,13 @@ CHECKPOINT_PATH = "artifacts/sac"
 MODEL_PATH = "artifacts/sac_final.zip"
 
 
-def run(render: bool = False, checkpoint: str | None = None, pretrained: str | None = None, timesteps: int = TOTAL_TIMESTEPS, checkpoint_out: str = CHECKPOINT_PATH):
+def run(
+    render: bool = False,
+    checkpoint: str | None = None,
+    pretrained: str | None = None,
+    timesteps: int = TOTAL_TIMESTEPS,
+    checkpoint_out: str = CHECKPOINT_PATH,
+):
     env_name = "GatherWood-v0"
     wood_env = GatherWoodEnvironment()
     wood_env.register()
@@ -56,13 +62,13 @@ def run(render: bool = False, checkpoint: str | None = None, pretrained: str | N
             env,
             verbose=1,
             buffer_size=100_000,
-            batch_size=128,
+            batch_size=512,
             learning_rate=1e-5,
             gamma=0.99,
             tau=5e-3,
             train_freq=4,
-            gradient_steps=1,
-            learning_starts=5000,
+            gradient_steps=8,
+            learning_starts=500,
             replay_buffer_class=NStepReplayBuffer,
             replay_buffer_kwargs={"n_steps": 50, "gamma": 0.99},
         )
@@ -73,7 +79,9 @@ def run(render: bool = False, checkpoint: str | None = None, pretrained: str | N
         save_path=checkpoint_out,
         name_prefix="sac_wood",
     )
-    reward_cb = RewardPlotCallback(output_path=os.path.join(checkpoint_out, "reward_plot.png"))
+    reward_cb = RewardPlotCallback(
+        output_path=os.path.join(checkpoint_out, "reward_plot.png")
+    )
 
     callbacks = [checkpoint_cb, reward_cb]
 
