@@ -6,7 +6,6 @@ from stable_baselines3.common.callbacks import CallbackList, CheckpointCallback
 
 from model.sac.callbacks import RewardPlotCallback
 from model.sac.replay_buffer import NStepReplayBuffer
-from model.sac.bc_callback import BCRegularizationCallback
 
 from environment.wood_environment import (
     GatherWoodEnvironment,
@@ -17,6 +16,7 @@ from environment.wood_environment import (
     RenderWrapper,
     ActionWrapper,
 )
+from environment.wrappers import RobustResetWrapper
 from model.environment import create_environment
 
 logger = logging.getLogger(__name__)
@@ -39,6 +39,7 @@ def run(
     env = create_environment(env_name, interactive=True)
 
     # Wrapper stack: raw env -> reward -> sticky attack -> wood detection -> render -> image obs -> action mapping
+    env = RobustResetWrapper(env, env_name=env_name)
     env = LogRewardWrapper(env, log_dir=checkpoint_out)
     env = StickyAttackWrapper(env, sticky_ticks=15)
     env = WoodDetectionRewardWrapper(env)
