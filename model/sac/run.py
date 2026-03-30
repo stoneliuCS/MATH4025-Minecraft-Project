@@ -67,7 +67,7 @@ def run(
             "CnnPolicy",
             env,
             verbose=1,
-            buffer_size=100_000,
+            buffer_size=500_000,
             batch_size=512,
             learning_rate=1e-5,
             gamma=0.99,
@@ -76,7 +76,7 @@ def run(
             gradient_steps=8,
             learning_starts=500,
             replay_buffer_class=NStepReplayBuffer,
-            replay_buffer_kwargs={"n_steps": 50, "gamma": 0.99},
+            replay_buffer_kwargs={"n_steps": 10, "gamma": 0.99},
         )
 
     os.makedirs(checkpoint_out, exist_ok=True)
