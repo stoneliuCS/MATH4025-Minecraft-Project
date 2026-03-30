@@ -32,6 +32,8 @@ def run(
     timesteps: int = TOTAL_TIMESTEPS,
     checkpoint_out: str = CHECKPOINT_PATH,
 ):
+    if checkpoint:
+        checkpoint_out = os.path.dirname(os.path.abspath(checkpoint))
     env_name = "GatherWood-v0"
 
     wood_env = GatherWoodEnvironment()
