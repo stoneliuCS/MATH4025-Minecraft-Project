@@ -127,8 +127,8 @@ class MineBlockRewardWrapper(gym.Wrapper):
 
     def reset(self, **kwargs):
         obs = self.env.reset(**kwargs)
-        ray = obs.get("ray", {}) if isinstance(obs, dict) else {}
-        mine_block = ray.get("mine_block", {})
+        ray_data = obs.get("ray", {}).get("ray_data", {}) if isinstance(obs, dict) else {}
+        mine_block = ray_data.get("mine_block", {})
         self.prev_mine_counts = dict(mine_block) if isinstance(mine_block, dict) else {}
         return obs
 
@@ -136,10 +136,9 @@ class MineBlockRewardWrapper(gym.Wrapper):
         obs, reward, done, info = self.env.step(action)
         reward -= 0.005
 
-        obs_ray = obs.get("ray", {})
-        # print(f"Ray observation: {obs_ray.get('hit_type')}")
-        mined = obs_ray.get("mine_block")
-        # print(f"mine_block observation: {mined}")
+        ray_data = obs.get("ray", {}).get("ray_data", {})
+        mined = ray_data.get("mine_block")
+        print(f"[MineBlock] mine_block={mined}")
 
         if isinstance(mined, dict):
             for block_name, count in mined.items():
@@ -301,6 +300,7 @@ class GatherWoodEnvironment(HumanControlEnvSpec):
         return super().create_observables() + [
             handlers.ObservationFromCurrentLocation(),
             handlers.ObservationFromLifeStats(),
+            handlers.ObserveFromFullStats("mine_block"),
             RayObservation(),
         ]
 

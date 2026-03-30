@@ -89,8 +89,6 @@ class _RayObservation(TranslationHandler):
 
     def from_hero(self, obs):
         output = self.space.no_op()
-        # print("FULL OBS:", obs)
-        # print(f" hi{obs.keys()}")
         raw_mine = obs.get("mine_block", {})
 
         if isinstance(raw_mine, dict):
@@ -98,11 +96,11 @@ class _RayObservation(TranslationHandler):
                 output["mine_block"][key] = np.int32(raw_mine.get(key, 0))
 
         if "LineOfSight" not in obs:
+            print("[Ray] No LineOfSight in obs")
             return output
 
         los = obs["LineOfSight"]
-        # print("[_RayObservation] LineOfSight data:", los)
-        # output["type"] = los.get("type", "")
+        print(f"[Ray] LineOfSight: type={los.get('type')} hitType={los.get('hitType')} inRange={los.get('inRange')} distance={los.get('distance', 0.0):.2f}")
         block_name = los.get("type", "")
 
         for key in output["type"].keys():
