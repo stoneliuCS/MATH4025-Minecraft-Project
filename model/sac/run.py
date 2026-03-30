@@ -1,5 +1,6 @@
 import logging
 import os
+import time
 
 from stable_baselines3 import SAC
 from stable_baselines3.common.callbacks import CallbackList, CheckpointCallback
@@ -49,13 +50,14 @@ def run(
     env = GymV21CompatibilityV0(
         env_id=env_name, env=env
     )  # convert old gym → gymnasium at the boundary for SB3/Monitor
-    env = Monitor(env, filename=os.path.join(checkpoint_out, "monitor"))
+    env = Monitor(env, filename=os.path.join(checkpoint_out, f"monitor_{int(time.time())}"))
 
     os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
 
     if checkpoint:
         logger.info(f"Resuming from checkpoint: {checkpoint}")
         model = SAC.load(checkpoint, env=env)
+        model.learning_starts = model.num_timesteps + 500  # collect fresh steps before training on empty buffer
     elif pretrained:
         logger.info(f"Loading pretrained BC weights: {pretrained}")
         model = SAC.load(pretrained, env=env)
