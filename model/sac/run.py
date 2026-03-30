@@ -11,7 +11,6 @@ from environment.wood_env2 import (
     MineBlockRewardWrapper,
     PovImageWrapper,
     RenderWrapper,
-    StickyAttackWrapper,
 )
 from environment.wrappers import RobustResetWrapper
 from shimmy.openai_gym_compatibility import GymV21CompatibilityV0
@@ -41,7 +40,6 @@ def run(
     env = create_environment(env_name, interactive=True)
     env = RobustResetWrapper(env, env_name=env_name)
     env = MineBlockRewardWrapper(env)
-    env = StickyAttackWrapper(env, sticky_ticks=15)
     if render:
         env = RenderWrapper(env)
     env = PovImageWrapper(env)
