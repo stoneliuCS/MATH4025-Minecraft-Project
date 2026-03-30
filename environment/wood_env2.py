@@ -1,5 +1,4 @@
 import logging
-import random
 import gym
 import numpy as np
 import cv2
@@ -11,9 +10,7 @@ from minerl.herobraine.env_specs.basalt_specs import HumanControlEnvSpec
 from minerl.herobraine.hero.handler import Handler
 import minerl.herobraine.hero.handlers as handlers
 from typing_extensions import override
-from .ray import RayObservation
-from collections import deque
-
+from environment.ray import ObservationFromRay as RayObservation
 
 import minerl.herobraine.hero.handlers as handlers
 

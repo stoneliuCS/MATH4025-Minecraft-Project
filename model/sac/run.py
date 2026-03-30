@@ -38,7 +38,6 @@ def run(
     wood_env.register()
     env = create_environment(env_name, interactive=True)
 
-    # Wrapper stack: raw env -> reward -> sticky attack -> wood detection -> render -> image obs -> action mapping
     env = RobustResetWrapper(env, env_name=env_name)
     env = LogRewardWrapper(env, log_dir=checkpoint_out)
     env = StickyAttackWrapper(env, sticky_ticks=15)

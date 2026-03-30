@@ -18,14 +18,15 @@ from pathlib import Path
 
 import numpy as np
 
-from environment.wood_environment import (
-    GatherWoodEnvironment,
-    LogRewardWrapper,
+from environment.wood_env2 import (
     StickyAttackWrapper,
-    WoodDetectionRewardWrapper,
     PovImageWrapper,
     ActionWrapper,
+    SafeMineRLWrapper,
+    GatherWoodEnvironment,
 )
+
+from environment import ray
 from model.environment import create_environment
 from stable_baselines3 import SAC
 
@@ -37,9 +38,8 @@ def _build_env():
     env_name = "GatherWood-v0"
     GatherWoodEnvironment().register()
     env = create_environment(env_name, interactive=True)
-    env = LogRewardWrapper(env)
+    env = SafeMineRLWrapper(env)
     env = StickyAttackWrapper(env, sticky_ticks=15)
-    env = WoodDetectionRewardWrapper(env)
     env = PovImageWrapper(env)
     env = ActionWrapper(env)
     return env
@@ -87,22 +87,27 @@ def _save_csv(results: list[tuple[int, float, float]], out_dir: str):
 def _plot(results: list[tuple[int, float, float]], out_dir: str):
     try:
         import matplotlib
+
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
     except ImportError:
         logger.warning("matplotlib not installed — skipping plot.")
         return
 
-    steps  = [r[0] for r in results]
-    means  = [r[1] for r in results]
-    stds   = [r[2] for r in results]
+    steps = [r[0] for r in results]
+    means = [r[1] for r in results]
+    stds = [r[2] for r in results]
 
     fig, ax = plt.subplots(figsize=(10, 4))
     ax.plot(steps, means, marker="o", color="steelblue", label="mean reward")
-    ax.fill_between(steps,
-                    [m - s for m, s in zip(means, stds)],
-                    [m + s for m, s in zip(means, stds)],
-                    alpha=0.2, color="steelblue", label="±1 std")
+    ax.fill_between(
+        steps,
+        [m - s for m, s in zip(means, stds)],
+        [m + s for m, s in zip(means, stds)],
+        alpha=0.2,
+        color="steelblue",
+        label="±1 std",
+    )
     ax.set_xlabel("Training timestep")
     ax.set_ylabel("Episode reward")
     ax.set_title("SAC Checkpoint Evaluation")
@@ -131,7 +136,9 @@ def evaluate(
     if not checkpoints:
         raise FileNotFoundError(f"No checkpoint zips found in {checkpoint_dir}")
 
-    logger.info(f"Found {len(checkpoints)} checkpoints — evaluating {episodes} episodes each")
+    logger.info(
+        f"Found {len(checkpoints)} checkpoints — evaluating {episodes} episodes each"
+    )
     os.makedirs(out_dir, exist_ok=True)
 
     env = _build_env()
@@ -152,13 +159,24 @@ def evaluate(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--checkpoint-dir", default="artifacts/sac",
-                        help="Directory containing sac_wood_*_steps.zip files")
-    parser.add_argument("--checkpoint", default=None,
-                        help="Path to a single checkpoint zip to evaluate")
-    parser.add_argument("--episodes", type=int, default=3,
-                        help="Episodes to run per checkpoint")
-    parser.add_argument("--out", default="artifacts",
-                        help="Directory to save CSV and plot")
+    parser.add_argument(
+        "--checkpoint-dir",
+        default="artifacts/sac",
+        help="Directory containing sac_wood_*_steps.zip files",
+    )
+    parser.add_argument(
+        "--checkpoint", default=None, help="Path to a single checkpoint zip to evaluate"
+    )
+    parser.add_argument(
+        "--episodes", type=int, default=3, help="Episodes to run per checkpoint"
+    )
+    parser.add_argument(
+        "--out", default="artifacts", help="Directory to save CSV and plot"
+    )
     args = parser.parse_args()
-    evaluate(checkpoint_dir=args.checkpoint_dir, checkpoint=args.checkpoint, episodes=args.episodes, out_dir=args.out)
+    evaluate(
+        checkpoint_dir=args.checkpoint_dir,
+        checkpoint=args.checkpoint,
+        episodes=args.episodes,
+        out_dir=args.out,
+    )
