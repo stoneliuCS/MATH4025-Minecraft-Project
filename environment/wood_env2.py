@@ -120,6 +120,8 @@ class MineBlockRewardWrapper(gym.Wrapper):
     LEAF_REWARD = 0.05
     DIRT_PENALTY = 0.02
     GRASS_PENALTY = 0.02
+    ATTACK_LOG_REWARD = 0.5
+    ATTACK_NONWOOD_PENALTY = 0.001
 
     def __init__(self, env):
         super().__init__(env)
@@ -173,7 +175,15 @@ class MineBlockRewardWrapper(gym.Wrapper):
         else:
             attack_active = action[6] > 0.25  # numpy array from SAC policy
         if looking_at_log and ray_data.get("in_range") and attack_active:
-            reward += 0.5
+            reward += self.ATTACK_LOG_REWARD
+            print(f"[Reward] +{self.ATTACK_LOG_REWARD} attacking log")
+
+        # Penalty for attacking anything that isn't a log or leaves
+        if attack_active and ray_data.get("in_range") and not looking_at_log:
+            looking_at_leaves = any(ray_data.get("type", {}).get(k, 0) for k in self.LEAF_ITEMS if k in ray_data.get("type", {}))
+            if not looking_at_leaves:
+                reward -= self.ATTACK_NONWOOD_PENALTY
+                print(f"[Reward] -{self.ATTACK_NONWOOD_PENALTY} attacking non-wood")
 
         return obs, reward, done, info
 
