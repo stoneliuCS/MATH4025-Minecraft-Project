@@ -4,7 +4,7 @@ import torch
 def preference_loss(reward_model, seg_a, seg_b, prefs):
     """
     seg_a, seg_b: (batch, T, obs_dim) trajectory segments
-    prefs: (batch,) float — 1.0 if seg_a preferred, 0.0 if seg_b preferred, 0.5 for ties
+    prefs: (batch,) float  1.0 if seg_a preferred, 0.0 if seg_b preferred, 0.5 for ties
     """
     r_a = reward_model(seg_a)  # (batch,)
     r_b = reward_model(seg_b)  # (batch,)

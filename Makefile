@@ -95,6 +95,10 @@ dqn: env
 	@JAVA_HOME="$(JAVA_HOME_8)" PATH="$(JAVA_HOME_8)/bin:$$PATH" \
 	"$(VENV_DIR)/bin/python" -m model.main --mode dqn
 
+rlhf: env
+	@JAVA_HOME="$(JAVA_HOME_8)" PATH="$(JAVA_HOME_8)/bin:$$PATH" \
+	"$(VENV_DIR)/bin/python" -m model.main --mode rlhf
+
 dqn-eval: env
 	@if [ ! -f "$(PROJECT_ROOT)/artifacts/dqn_model.pt" ]; then \
 		echo "Error: No saved DQN model found at artifacts/dqn_model.pt"; \

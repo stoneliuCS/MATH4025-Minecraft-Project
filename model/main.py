@@ -4,7 +4,6 @@ import importlib.util
 import os
 import time
 from minerl import *
-
 #from environment.restricted_wrapper import RestrictedActionWrapper
 #from environment.distance_wrapper import DistanceActionWrapper
 
@@ -51,44 +50,40 @@ def run_dqn_training():
         if train_env is not None:
             train_env.close()
 
+def run_rlhf_training():
+    # import the necessary code
+    path = os.path.join(os.path.dirname(__file__), "rlhf", "train.py")
+    spec = importlib.util.spec_from_file_location("rlhf", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    rlhf = mod
 
-def run_dqn_eval():
-    """Evaluate a trained DQN agent with GUI."""
     env_name = "World2"
     abs_box_env = World2Environment()
     abs_box_env.register()
 
-    dqn_train = _load_dqn_train()
-
-    print("=" * 60)
-    print("Evaluating DQN agent (with GUI)...")
-    print("=" * 60)
-    eval_env = None
-    try:
-        eval_env = create_environment(env_name, interactive=True)
-        print("Waiting for Minecraft client to connect...")
-        time.sleep(5)
-        dqn_train.evaluate_dqn(RestrictedActionWrapper(eval_env), render=True)
+    train_env = None
+    try: 
+        train_env = create_environment(env_name, interactive=True)
+        
+        rlhf.train(train_env)
     finally:
-        if eval_env is not None:
-            eval_env.close()
+        if train_env is not None:
+            train_env.close()
+
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run Q-learning agent training or evaluation")
     parser.add_argument(
         "--mode",
-        choices=["train", "run-learned", "dqn", "dqn-eval"],
+        choices=["train", "rlhf"],
         default="train",
-        help="Mode: 'train' tabular Q-learning, 'run-learned' load Q-table, 'dqn' train DQN, 'dqn-eval' evaluate DQN",
+        help="just pick a mode",
     )
     args = parser.parse_args()
 
-    if args.mode == "train":
-        run_simple_environment()
-    elif args.mode == "run-learned":
-        run_learned_agent_only()
+    if args.mode == "rlhf":
+        run_rlhf_training()
     elif args.mode == "dqn":
         run_dqn_training()
-    elif args.mode == "dqn-eval":
-        run_dqn_eval()
