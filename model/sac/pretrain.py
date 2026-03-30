@@ -27,7 +27,7 @@ import torch
 import torch.optim as optim
 from stable_baselines3 import SAC
 
-from environment.wood_environment import (
+from environment.wood_env2 import (
     FRAME_SIZE,
     CAMERA_MAX_ANGLE,
     ACTION_DIM,
@@ -129,11 +129,13 @@ def _load_trajectory(
     def _binary(arr):
         return np.where(arr > 0, 0.5, -0.5).astype(np.float32)
 
+    jump = np.full(T, -0.5, dtype=np.float32)  # no jump in human demos
+
     acts = np.stack(
         [pitch, yaw, _binary(forward), _binary(back),
-         _binary(left), _binary(right), _binary(attack)],
+         _binary(left), _binary(right), _binary(attack), jump],
         axis=1,
-    )  # (T, 7)
+    )  # (T, 8)
 
     # ── frames ───────────────────────────────────────────────────────────────
     # Video is already 64×64; just convert BGR→RGB and transpose to (C,H,W)
