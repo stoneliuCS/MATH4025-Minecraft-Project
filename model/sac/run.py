@@ -3,20 +3,19 @@ import os
 
 from stable_baselines3 import SAC
 from stable_baselines3.common.callbacks import CallbackList, CheckpointCallback
+from stable_baselines3.common.monitor import Monitor
 
-from model.sac.callbacks import RewardPlotCallback
-from model.sac.replay_buffer import NStepReplayBuffer
-
-from environment.wood_environment import (
+from environment.wood_env2 import (
+    ActionWrapper,
     GatherWoodEnvironment,
-    LogRewardWrapper,
-    StickyAttackWrapper,
-    WoodDetectionRewardWrapper,
+    MineBlockRewardWrapper,
     PovImageWrapper,
     RenderWrapper,
-    ActionWrapper,
+    StickyAttackWrapper,
 )
 from environment.wrappers import RobustResetWrapper
+from model.sac.callbacks import RewardPlotCallback
+from model.sac.replay_buffer import NStepReplayBuffer
 from model.environment import create_environment
 
 logger = logging.getLogger(__name__)
@@ -34,18 +33,19 @@ def run(
     checkpoint_out: str = CHECKPOINT_PATH,
 ):
     env_name = "GatherWood-v0"
+
     wood_env = GatherWoodEnvironment()
     wood_env.register()
-    env = create_environment(env_name, interactive=True)
 
-    env = RobustResetWrapper(env, env_name=env_name)
-    env = LogRewardWrapper(env, log_dir=checkpoint_out)
+    env = create_environment(env_name, interactive=True)
+    env = MineBlockRewardWrapper(env)
     env = StickyAttackWrapper(env, sticky_ticks=15)
-    env = WoodDetectionRewardWrapper(env)
     if render:
         env = RenderWrapper(env)
     env = PovImageWrapper(env)
     env = ActionWrapper(env)
+    env = RobustResetWrapper(env, env_name=env_name)
+    env = Monitor(env, filename=os.path.join(checkpoint_out, "monitor"))
 
     os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
 
