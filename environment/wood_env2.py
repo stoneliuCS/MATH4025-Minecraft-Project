@@ -165,6 +165,16 @@ class MineBlockRewardWrapper(gym.Wrapper):
 
             self.prev_mine_counts = mined.copy()
 
+        # Intermediate shaping: reward attacking while looking at a log in range
+        ray_los = ray_data.get("type", {})
+        looking_at_log = any(ray_los.get(k, 0) for k in ("oak_log", "birch_log", "spruce_log"))
+        if isinstance(action, dict):
+            attack_active = action.get("attack", 0) == 1
+        else:
+            attack_active = action[6] > 0.25  # numpy array from SAC policy
+        if looking_at_log and ray_data.get("in_range") and attack_active:
+            reward += 0.5
+
         return obs, reward, done, info
 
 
