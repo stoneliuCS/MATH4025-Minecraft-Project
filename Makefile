@@ -31,6 +31,7 @@ help:
 	@echo "  make sac         Train the SAC agent on GatherWood"
 	@echo "  make sac-pretrain  BC pretrain SAC from MineRL dataset (no Minecraft needed)"
 	@echo "  make eval-checkpoints  Evaluate all SAC checkpoints and plot reward curve"
+	@echo " make ppo         Train the PPO agent on GatherWood"
 	@echo "  make interactor  Run MineRL interactor on port $(INTERACTIVE_PORT)"
 	@echo "  make patch-minerl  Patch/rebuild MCP-Reborn and copy into venv"
 
@@ -141,6 +142,10 @@ eval-checkpoints: env
 	  --out artifacts \
 	  $(if $(RENDER),--render,)
 
+
+ppo: env
+	@JAVA_HOME="$(JAVA_HOME_8)" PATH="$(JAVA_HOME_8)/bin:$$PATH" \
+	"$(VENV_DIR)/bin/python" -m model.main --mode ppo $(if $(RENDER),--render,)
 
 interactor: env
 	@JAVA_HOME="$(JAVA_HOME_8)" PATH="$(JAVA_HOME_8)/bin:$$PATH" \

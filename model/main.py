@@ -51,11 +51,14 @@ def run_simple_environment():
                 render=True,
             )
             avg_random = sum(random_returns) / len(random_returns)
-            logging.info(f"Random policy average return over 5 episodes: {avg_random:.2f}")
+            logging.info(
+                f"Random policy average return over 5 episodes: {avg_random:.2f}"
+            )
         finally:
             if baseline_env is not None:
                 baseline_env.close()
                 time.sleep(2)  # Give time for cleanup
+
     def train():
         # 2) Train Q-learning agent (headless - no GUI for faster training)
         print("=" * 60)
@@ -64,7 +67,9 @@ def run_simple_environment():
         train_env = None
         try:
             train_env = create_environment(env_name, interactive=False)
-            q_table = run_agent_with_q_learning(RestrictedActionWrapper(train_env), render_training=False)
+            q_table = run_agent_with_q_learning(
+                RestrictedActionWrapper(train_env), render_training=False
+            )
             # Save learned Q-table so it can be reused later without retraining
             save_q_table(q_table, "artifacts/q_table.pkl")
             return q_table
@@ -142,7 +147,9 @@ def run_learned_agent_only():
     eval_env = None
     try:
         eval_env = create_environment(env_name, interactive=True)
-        print("Waiting for Minecraft client to connect (this may take 10-30 seconds)...")
+        print(
+            "Waiting for Minecraft client to connect (this may take 10-30 seconds)..."
+        )
         time.sleep(5)  # Give client time to start and connect
         print("Environment ready!")
 
@@ -200,20 +207,62 @@ def run_dqn_eval():
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Run Q-learning agent training or evaluation")
+    parser = argparse.ArgumentParser(
+        description="Run Q-learning agent training or evaluation"
+    )
     parser.add_argument(
         "--mode",
-        choices=["train", "run-learned", "dqn", "dqn-eval", "sac", "sac-pretrain"],
+        choices=[
+            "train",
+            "run-learned",
+            "dqn",
+            "dqn-eval",
+            "sac",
+            "sac-pretrain",
+            "ppo",
+        ],
         default="train",
         help="Mode: 'train' tabular Q-learning, 'run-learned' load Q-table, 'dqn' train DQN, 'dqn-eval' evaluate DQN, 'sac' train SAC, 'sac-pretrain' BC pretrain SAC from MineRL data",
     )
-    parser.add_argument("--render", action="store_true", help="Enable env.render() during training")
-    parser.add_argument("--checkpoint", type=str, default=None, help="Path to checkpoint zip to resume from")
-    parser.add_argument("--pretrained", type=str, default=None, help="Path to BC-pretrained model to warm-start SAC")
-    parser.add_argument("--timesteps", type=int, default=None, help="Override total training timesteps for SAC")
-    parser.add_argument("--checkpoint-out", type=str, default=None, help="Directory to save SAC checkpoints during training")
-    parser.add_argument("--data-dir", type=str, default="data", help="Path to MineRL dataset directory (for sac-pretrain)")
-    parser.add_argument("--epochs", type=int, default=5, help="Number of BC pretraining epochs (for sac-pretrain)")
+    parser.add_argument(
+        "--render", action="store_true", help="Enable env.render() during training"
+    )
+    parser.add_argument(
+        "--checkpoint",
+        type=str,
+        default=None,
+        help="Path to checkpoint zip to resume from",
+    )
+    parser.add_argument(
+        "--pretrained",
+        type=str,
+        default=None,
+        help="Path to BC-pretrained model to warm-start SAC",
+    )
+    parser.add_argument(
+        "--timesteps",
+        type=int,
+        default=None,
+        help="Override total training timesteps for SAC",
+    )
+    parser.add_argument(
+        "--checkpoint-out",
+        type=str,
+        default=None,
+        help="Directory to save SAC checkpoints during training",
+    )
+    parser.add_argument(
+        "--data-dir",
+        type=str,
+        default="data",
+        help="Path to MineRL dataset directory (for sac-pretrain)",
+    )
+    parser.add_argument(
+        "--epochs",
+        type=int,
+        default=5,
+        help="Number of BC pretraining epochs (for sac-pretrain)",
+    )
     args = parser.parse_args()
 
     if args.mode == "train":
@@ -224,9 +273,16 @@ if __name__ == "__main__":
         run_dqn_training()
     elif args.mode == "dqn-eval":
         run_dqn_eval()
+    elif args.mode == "ppo":
+        from model.ppo.run import run as train_ppo
+
+        train_ppo(render=args.render)
     elif args.mode == "sac":
         from model.sac.run import run as run_sac
-        kwargs = dict(render=args.render, checkpoint=args.checkpoint, pretrained=args.pretrained)
+
+        kwargs = dict(
+            render=args.render, checkpoint=args.checkpoint, pretrained=args.pretrained
+        )
         if args.timesteps is not None:
             kwargs["timesteps"] = args.timesteps
         if args.checkpoint_out is not None:
@@ -234,4 +290,5 @@ if __name__ == "__main__":
         run_sac(**kwargs)
     elif args.mode == "sac-pretrain":
         from model.sac.pretrain import pretrain as pretrain_sac
+
         pretrain_sac(data_dir=args.data_dir, epochs=args.epochs)

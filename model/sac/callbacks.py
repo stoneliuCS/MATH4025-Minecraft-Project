@@ -20,6 +20,22 @@ class RewardPlotCallback(BaseCallback):
         self.window = window
         self.episode_rewards: list[float] = []
         self.episode_timesteps: list[int] = []
+        self._load_existing_csv()
+
+    def _load_existing_csv(self) -> None:
+        csv_path = self.output_path.replace(".png", ".csv")
+        if not os.path.exists(csv_path):
+            return
+        with open(csv_path) as f:
+            next(f)  # skip header
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                ts, r = line.split(",")
+                self.episode_timesteps.append(int(ts))
+                self.episode_rewards.append(float(r))
+        logger.info(f"Resumed {len(self.episode_rewards)} episodes from {csv_path}")
 
     def _on_step(self) -> bool:
         for info in self.locals.get("infos", []):
