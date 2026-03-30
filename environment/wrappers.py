@@ -19,6 +19,9 @@ class RobustResetWrapper(gym.Wrapper):
         self.env_name = env_name
 
     def reset(self, **kwargs):
+        # MineRL is old gym and doesn't accept gymnasium-style kwargs
+        kwargs.pop("seed", None)
+        kwargs.pop("options", None)
         for attempt in range(self.max_retries):
             try:
                 return self.env.reset(**kwargs)
@@ -45,5 +48,5 @@ class RobustResetWrapper(gym.Wrapper):
                 pass
             time.sleep(5)
             self.env = create_environment(objective=self.env_name)
-            obs = self.env.reset()
+            obs = self.env.reset()  # no seed/options — MineRL is old gym
             return obs, 0.0, True, {"env_restarted": True}

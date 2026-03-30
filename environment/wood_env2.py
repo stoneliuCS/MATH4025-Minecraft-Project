@@ -2,7 +2,6 @@ import logging
 import gym
 import numpy as np
 import cv2
-import gym.spaces
 
 logger = logging.getLogger(__name__)
 from minerl.herobraine.env_spec import TranslationHandler
@@ -11,8 +10,6 @@ from minerl.herobraine.hero.handler import Handler
 import minerl.herobraine.hero.handlers as handlers
 from typing_extensions import override
 from environment.ray import ObservationFromRay as RayObservation
-
-import minerl.herobraine.hero.handlers as handlers
 
 MAX_EPISODE_STEPS = 1000
 MAX_REWARD_THRESHOLD = 100
@@ -129,8 +126,11 @@ class MineBlockRewardWrapper(gym.Wrapper):
         self.prev_mine_counts = {}
 
     def reset(self, **kwargs):
-        self.prev_mine_counts = {}
-        return self.env.reset(**kwargs)
+        obs = self.env.reset(**kwargs)
+        ray = obs.get("ray", {}) if isinstance(obs, dict) else {}
+        mine_block = ray.get("mine_block", {})
+        self.prev_mine_counts = dict(mine_block) if isinstance(mine_block, dict) else {}
+        return obs
 
     def step(self, action):
         obs, reward, done, info = self.env.step(action)

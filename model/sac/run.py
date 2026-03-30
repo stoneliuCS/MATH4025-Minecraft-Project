@@ -14,6 +14,7 @@ from environment.wood_env2 import (
     StickyAttackWrapper,
 )
 from environment.wrappers import RobustResetWrapper
+from shimmy.openai_gym_compatibility import GymV21CompatibilityV0
 from model.sac.callbacks import RewardPlotCallback
 from model.sac.replay_buffer import NStepReplayBuffer
 from model.environment import create_environment
@@ -38,13 +39,16 @@ def run(
     wood_env.register()
 
     env = create_environment(env_name, interactive=True)
+    env = RobustResetWrapper(env, env_name=env_name)
     env = MineBlockRewardWrapper(env)
     env = StickyAttackWrapper(env, sticky_ticks=15)
     if render:
         env = RenderWrapper(env)
     env = PovImageWrapper(env)
     env = ActionWrapper(env)
-    env = RobustResetWrapper(env, env_name=env_name)
+    env = GymV21CompatibilityV0(
+        env_id=env_name, env=env
+    )  # convert old gym → gymnasium at the boundary for SB3/Monitor
     env = Monitor(env, filename=os.path.join(checkpoint_out, "monitor"))
 
     os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
