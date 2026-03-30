@@ -70,7 +70,13 @@ class LogRewardWrapper(gym.Wrapper):  # pyright: ignore[reportPrivateImportUsage
     observation directly and rewards +1 per new log collected.
     """
 
-    def __init__(self, env, reward_per_log: float = 100.0, max_steps: int = 1000, log_dir: str = "artifacts"):
+    def __init__(
+        self,
+        env,
+        reward_per_log: float = 100.0,
+        max_steps: int = 1000,
+        log_dir: str = "artifacts",
+    ):
         super().__init__(env)
         self.reward_per_log = reward_per_log
         self.max_steps = max_steps
@@ -80,6 +86,7 @@ class LogRewardWrapper(gym.Wrapper):  # pyright: ignore[reportPrivateImportUsage
 
     def reset(self, **kwargs):
         import time
+
         time.sleep(2)
         obs = self.env.reset(**kwargs)
         self._prev_logs = self._get_log_count(obs)
@@ -88,6 +95,9 @@ class LogRewardWrapper(gym.Wrapper):  # pyright: ignore[reportPrivateImportUsage
 
     def step(self, action):
         obs, reward, done, info = self.env.step(action)
+        if info.get("env_restarted"):
+            self._prev_logs = self._get_log_count(obs)
+            return obs, 0.0, True, info
         self._steps += 1
         cur_logs = self._get_log_count(obs)
         log_diff = cur_logs - self._prev_logs
@@ -101,7 +111,10 @@ class LogRewardWrapper(gym.Wrapper):  # pyright: ignore[reportPrivateImportUsage
                 f.write(f"logs: {cur_logs} (+{log_diff}) reward: {reward}\n")
         elif self._steps >= self.max_steps:
             done = True
-            logger.info(f"Episode timeout after {self.max_steps} steps — no log collected")
+            logger.info(
+                f"Episode timeout after {self.max_steps} steps — no log collected"
+            )
+
         self._prev_logs = cur_logs
         return obs, reward, done, info
 
@@ -252,7 +265,8 @@ class ActionWrapper(gym.ActionWrapper):  # pyright: ignore[reportPrivateImportUs
         noop = self.env.action_space.noop()  # pyright: ignore[reportAttributeAccessIssue]
         noop["camera"] = np.array(
             [
-                np.clip(action[0], -0.3, 1.0) * CAMERA_MAX_ANGLE,  # limit upward look to 30%
+                np.clip(action[0], -0.3, 1.0)
+                * CAMERA_MAX_ANGLE,  # limit upward look to 30%
                 action[1] * CAMERA_MAX_ANGLE,
             ],
             dtype=np.float32,

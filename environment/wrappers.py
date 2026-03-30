@@ -46,4 +46,4 @@ class RobustResetWrapper(gym.Wrapper):
             time.sleep(5)
             self.env = create_environment(objective=self.env_name)
             obs = self.env.reset()
-            return obs, 0.0, True, {}  # treat as episode end
+            return obs, 0.0, True, {"env_restarted": True}
