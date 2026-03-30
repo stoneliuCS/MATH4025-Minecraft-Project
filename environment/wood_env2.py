@@ -10,7 +10,6 @@ from minerl.herobraine.env_specs.basalt_specs import HumanControlEnvSpec
 from minerl.herobraine.hero.handler import Handler
 import minerl.herobraine.hero.handlers as handlers
 from typing_extensions import override
-from .grid import GridObservation
 from .ray import RayObservation
 from collections import deque
 
