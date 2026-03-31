@@ -23,22 +23,41 @@ class _RayObservation(TranslationHandler):
             "minecraft:oak_log": 1,
             "minecraft:birch_log": 2,
             "minecraft:spruce_log": 3,
+            "minecraft:jungle_log": 4,
+            "minecraft:acacia_log": 5,
+            "minecraft:dark_oak_log": 6,
+            "minecraft:stripped_oak_log": 7,
+            "minecraft:stripped_spruce_log": 8,
+            "minecraft:stripped_birch_log": 9,
+            "minecraft:stripped_jungle_log": 10,
+            "minecraft:stripped_acacia_log": 11,
+            "minecraft:stripped_dark_oak_log": 12,
         }
+
+        def _log_flag():
+            return spaces.Box(low=0, high=1, shape=(), dtype=np.int32)
+
+        def _count():
+            return spaces.Box(low=0, high=1000, shape=(), dtype=np.int32)
+
         super().__init__(
             spaces.Dict(
                 {
                     "hit_type": spaces.Discrete(4),
                     "type": spaces.Dict(
                         {
-                            "oak_log": spaces.Box(
-                                low=0, high=1, shape=(), dtype=np.int32
-                            ),
-                            "birch_log": spaces.Box(
-                                low=0, high=1, shape=(), dtype=np.int32
-                            ),
-                            "spruce_log": spaces.Box(
-                                low=0, high=1, shape=(), dtype=np.int32
-                            ),
+                            "oak_log": _log_flag(),
+                            "birch_log": _log_flag(),
+                            "spruce_log": _log_flag(),
+                            "jungle_log": _log_flag(),
+                            "acacia_log": _log_flag(),
+                            "dark_oak_log": _log_flag(),
+                            "stripped_oak_log": _log_flag(),
+                            "stripped_spruce_log": _log_flag(),
+                            "stripped_birch_log": _log_flag(),
+                            "stripped_jungle_log": _log_flag(),
+                            "stripped_acacia_log": _log_flag(),
+                            "stripped_dark_oak_log": _log_flag(),
                         }
                     ),
                     "distance": spaces.Box(
@@ -50,27 +69,26 @@ class _RayObservation(TranslationHandler):
                     "z": spaces.Box(low=-1e6, high=1e6, shape=(), dtype=np.float32),
                     "mine_block": spaces.Dict(
                         {
-                            "oak_log": spaces.Box(
-                                low=0, high=1000, shape=(), dtype=np.int32
-                            ),
-                            "spruce_log": spaces.Box(
-                                low=0, high=1000, shape=(), dtype=np.int32
-                            ),
-                            "birch_log": spaces.Box(
-                                low=0, high=1000, shape=(), dtype=np.int32
-                            ),
-                            "oak_leaves": spaces.Box(
-                                low=0, high=1000, shape=(), dtype=np.int32
-                            ),
-                            "spruce_leaves": spaces.Box(
-                                low=0, high=1000, shape=(), dtype=np.int32
-                            ),
-                            "dirt": spaces.Box(
-                                low=0, high=1000, shape=(), dtype=np.int32
-                            ),
-                            "grass_block": spaces.Box(
-                                low=0, high=1000, shape=(), dtype=np.int32
-                            ),
+                            "oak_log": _count(),
+                            "spruce_log": _count(),
+                            "birch_log": _count(),
+                            "jungle_log": _count(),
+                            "acacia_log": _count(),
+                            "dark_oak_log": _count(),
+                            "stripped_oak_log": _count(),
+                            "stripped_spruce_log": _count(),
+                            "stripped_birch_log": _count(),
+                            "stripped_jungle_log": _count(),
+                            "stripped_acacia_log": _count(),
+                            "stripped_dark_oak_log": _count(),
+                            "oak_leaves": _count(),
+                            "spruce_leaves": _count(),
+                            "birch_leaves": _count(),
+                            "jungle_leaves": _count(),
+                            "acacia_leaves": _count(),
+                            "dark_oak_leaves": _count(),
+                            "dirt": _count(),
+                            "grass_block": _count(),
                         }
                     ),
                 }

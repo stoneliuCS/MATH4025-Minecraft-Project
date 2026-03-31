@@ -97,27 +97,21 @@ class RenderWrapper(gym.Wrapper):  # pyright: ignore[reportPrivateImportUsage]
 
 class MineBlockRewardWrapper(gym.Wrapper):
     LOG_ITEMS = {
-        "oak_log",
-        "spruce_log",
-        "birch_log",
-        "jungle_log",
-        "acacia_log",
-        "dark_oak_log",
+        "oak_log", "spruce_log", "birch_log",
+        "jungle_log", "acacia_log", "dark_oak_log",
+        "stripped_oak_log", "stripped_spruce_log", "stripped_birch_log",
+        "stripped_jungle_log", "stripped_acacia_log", "stripped_dark_oak_log",
     }
 
     LEAF_ITEMS = {
-        "oak_leaves",
-        "spruce_leaves",
-        "birch_leaves",
-        "jungle_leaves",
-        "acacia_leaves",
-        "dark_oak_leaves",
+        "oak_leaves", "spruce_leaves", "birch_leaves",
+        "jungle_leaves", "acacia_leaves", "dark_oak_leaves",
     }
 
     PENALTY_ITEMS = {"dirt", "grass_block"}
 
     LOG_REWARD = 1.0
-    LEAF_REWARD = 0.005
+    LEAF_REWARD = 0.0001
     DIRT_PENALTY = 0.002
     GRASS_PENALTY = 0.002
     ATTACK_LOG_REWARD = 0.1
@@ -175,7 +169,7 @@ class MineBlockRewardWrapper(gym.Wrapper):
 
         # Intermediate shaping: reward attacking while looking at a log in range
         ray_los = ray_data.get("type", {})
-        looking_at_log = any(ray_los.get(k, 0) for k in ("oak_log", "birch_log", "spruce_log"))
+        looking_at_log = any(ray_los.get(k, 0) for k in self.LOG_ITEMS if k in ray_los)
         if isinstance(action, dict):
             attack_active = action.get("attack", 0) == 1
         else:
