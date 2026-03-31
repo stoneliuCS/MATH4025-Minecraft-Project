@@ -120,8 +120,8 @@ class MineBlockRewardWrapper(gym.Wrapper):
     LEAF_REWARD = 0.005
     DIRT_PENALTY = 0.002
     GRASS_PENALTY = 0.002
-    ATTACK_LOG_REWARD = 0.05
-    ATTACK_NONWOOD_PENALTY = 0.0001
+    ATTACK_LOG_REWARD = 0.1
+    ATTACK_NONWOOD_PENALTY = 0.0
     TIME_PENALTY = 0.0005
 
     def __init__(self, env):
