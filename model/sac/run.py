@@ -69,7 +69,7 @@ def run(
             verbose=1,
             buffer_size=500_000,
             batch_size=512,
-            learning_rate=1e-5,
+            learning_rate=3e-4,
             gamma=0.99,
             tau=5e-3,
             train_freq=4,

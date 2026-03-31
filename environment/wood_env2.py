@@ -116,12 +116,13 @@ class MineBlockRewardWrapper(gym.Wrapper):
 
     PENALTY_ITEMS = {"dirt", "grass_block"}
 
-    LOG_REWARD = 10.0
-    LEAF_REWARD = 0.05
-    DIRT_PENALTY = 0.02
-    GRASS_PENALTY = 0.02
-    ATTACK_LOG_REWARD = 0.5
-    ATTACK_NONWOOD_PENALTY = 0.001
+    LOG_REWARD = 1.0
+    LEAF_REWARD = 0.005
+    DIRT_PENALTY = 0.002
+    GRASS_PENALTY = 0.002
+    ATTACK_LOG_REWARD = 0.05
+    ATTACK_NONWOOD_PENALTY = 0.0001
+    TIME_PENALTY = 0.0005
 
     def __init__(self, env):
         super().__init__(env)
@@ -136,7 +137,7 @@ class MineBlockRewardWrapper(gym.Wrapper):
 
     def step(self, action):
         obs, reward, done, info = self.env.step(action)
-        reward -= 0.005
+        reward -= self.TIME_PENALTY
 
         ray_data = obs.get("ray", {}).get("ray_data", {})
         mined = ray_data.get("mine_block")
