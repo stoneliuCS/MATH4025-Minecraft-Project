@@ -143,29 +143,40 @@ class MineBlockRewardWrapper(gym.Wrapper):
                 self.prev_mine_counts = dict(mined)
                 self._seeded = True
 
-            for block_name, count in mined.items():
-                prev_count = self.prev_mine_counts.get(block_name, 0)
-                delta = min(count - prev_count, 5)
+            # Sanity check: total deltas across all blocks in one step
+            total_delta = sum(
+                max(int(count) - self.prev_mine_counts.get(block_name, 0), 0)
+                for block_name, count in mined.items()
+            )
+            if total_delta > 10:
+                # Implausible — ObservationFromFullStats dumped lifetime stats at once.
+                # Absorb counts silently without rewarding.
+                print(f"[MineBlock] Corrupt spike detected (total_delta={total_delta}), skipping reward")
+                self.prev_mine_counts = {k: int(v) for k, v in mined.items()}
+            else:
+                for block_name, count in mined.items():
+                    prev_count = self.prev_mine_counts.get(block_name, 0)
+                    delta = min(int(count) - prev_count, 5)
 
-                if delta > 0:
-                    if block_name in self.LOG_ITEMS:
-                        bonus = self.LOG_REWARD * delta
-                        reward += bonus
-                        print(f"+{bonus:.2f} for {count}x {block_name}")
+                    if delta > 0:
+                        if block_name in self.LOG_ITEMS:
+                            bonus = self.LOG_REWARD * delta
+                            reward += bonus
+                            print(f"+{bonus:.2f} for {count}x {block_name}")
 
-                    elif block_name in self.LEAF_ITEMS:
-                        bonus = self.LEAF_REWARD * delta
-                        reward += bonus
-                        print(f"+{bonus:.2f} for {count}x {block_name}")
+                        elif block_name in self.LEAF_ITEMS:
+                            bonus = self.LEAF_REWARD * delta
+                            reward += bonus
+                            print(f"+{bonus:.2f} for {count}x {block_name}")
 
-                    elif block_name in self.PENALTY_ITEMS:
-                        penalty = self.DIRT_PENALTY * delta
-                        if block_name == "grass_block":
-                            penalty = self.GRASS_PENALTY * delta
-                        reward -= penalty
-                        print(f"-{penalty:.2f} for {count}x {block_name}")
+                        elif block_name in self.PENALTY_ITEMS:
+                            penalty = self.DIRT_PENALTY * delta
+                            if block_name == "grass_block":
+                                penalty = self.GRASS_PENALTY * delta
+                            reward -= penalty
+                            print(f"-{penalty:.2f} for {count}x {block_name}")
 
-            self.prev_mine_counts = mined.copy()
+                self.prev_mine_counts = {k: int(v) for k, v in mined.items()}
 
         # Intermediate shaping: reward attacking while looking at a log in range
         ray_los = ray_data.get("type", {})
