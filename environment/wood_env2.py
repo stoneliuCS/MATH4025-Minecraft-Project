@@ -127,12 +127,12 @@ class MineBlockRewardWrapper(gym.Wrapper):
     def __init__(self, env):
         super().__init__(env)
         self.prev_mine_counts = {}
+        self._seeded = False
 
     def reset(self, **kwargs):
         obs = self.env.reset(**kwargs)
-        ray_data = obs.get("ray", {}).get("ray_data", {}) if isinstance(obs, dict) else {}
-        mine_block = ray_data.get("mine_block", {})
-        self.prev_mine_counts = dict(mine_block) if isinstance(mine_block, dict) else {}
+        self.prev_mine_counts = {}
+        self._seeded = False  # seed from first step obs, not reset obs
         return obs
 
     def step(self, action):
@@ -144,9 +144,14 @@ class MineBlockRewardWrapper(gym.Wrapper):
         print(f"[MineBlock] mine_block={mined}")
 
         if isinstance(mined, dict):
+            if not self._seeded:
+                # seed counts from first real step obs to avoid delta spike
+                self.prev_mine_counts = dict(mined)
+                self._seeded = True
+
             for block_name, count in mined.items():
                 prev_count = self.prev_mine_counts.get(block_name, 0)
-                delta = count - prev_count
+                delta = min(count - prev_count, 5)
 
                 if delta > 0:
                     if block_name in self.LOG_ITEMS:
