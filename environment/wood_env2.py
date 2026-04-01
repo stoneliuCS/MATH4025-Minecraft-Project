@@ -10,18 +10,20 @@ from minerl.herobraine.env_specs.basalt_specs import HumanControlEnvSpec
 from minerl.herobraine.hero.handler import Handler
 import minerl.herobraine.hero.handlers as handlers
 from typing_extensions import override
-from .grid import GridObservation
-from .ray import RayObservation
+from .ray import ObservationFromRay
 from collections import deque
 
 
 import minerl.herobraine.hero.handlers as handlers
-MAX_EPISODE_STEPS = 1000
+MAX_EPISODE_STEPS = 2000
 MAX_REWARD_THRESHOLD = 100
 FRAME_SIZE = 64
 CAMERA_MAX_ANGLE = 5.0
 ACTION_DIM = 8  # 2 camera + 5 discrete (forward, back, left, right, attack)
 LOG_ITEMS = ["oak_log", "spruce_log", "birch_log", "jungle_log", "acacia_log", "dark_oak_log"]
+MINECRAFT_LOG_ITEMS = ["minecraft:oak_log", "minecraft:spruce_log", "minecraft:birch_log", "minecraft:jungle_log", "minecraft:acacia_log", "minecraft:dark_oak_log"]
+TREECHOP_WORLD_GENERATOR_OPTIONS = """{"coordinateScale":684.412,"heightScale":684.412,"lowerLimitScale":512.0,"upperLimitScale":512.0,"depthNoiseScaleX":200.0,"depthNoiseScaleZ":200.0,"depthNoiseScaleExponent":0.5,"mainNoiseScaleX":80.0,"mainNoiseScaleY":160.0,"mainNoiseScaleZ":80.0,"baseSize":8.5,"stretchY":12.0,"biomeDepthWeight":1.0,"biomeDepthOffset":0.0,"biomeScaleWeight":1.0,"biomeScaleOffset":0.0,"seaLevel":1,"useCaves":false,"useDungeons":false,"dungeonChance":8,"useStrongholds":false,"useVillages":false,"useMineShafts":false,"useTemples":false,"useMonuments":false,"useMansions":false,"useRavines":false,"useWaterLakes":false,"waterLakeChance":4,"useLavaLakes":false,"lavaLakeChance":80,"useLavaOceans":false,"fixedBiome":2,"biomeSize":4,"riverSize":1,"dirtSize":33,"dirtCount":10,"dirtMinHeight":0,"dirtMaxHeight":256,"gravelSize":33,"gravelCount":8,"gravelMinHeight":0,"gravelMaxHeight":256,"graniteSize":33,"graniteCount":10,"graniteMinHeight":0,"graniteMaxHeight":80,"dioriteSize":33,"dioriteCount":10,"dioriteMinHeight":0,"dioriteMaxHeight":80,"andesiteSize":33,"andesiteCount":10,"andesiteMinHeight":0,"andesiteMaxHeight":80,"coalSize":17,"coalCount":20,"coalMinHeight":0,"coalMaxHeight":128,"ironSize":9,"ironCount":20,"ironMinHeight":0,"ironMaxHeight":64,"goldSize":9,"goldCount":2,"goldMinHeight":0,"goldMaxHeight":32,"redstoneSize":8,"redstoneCount":8,"redstoneMinHeight":0,"redstoneMaxHeight":16,"diamondSize":8,"diamondCount":1,"diamondMinHeight":0,"diamondMaxHeight":16,"lapisSize":7,"lapisCount":1,"lapisCenterHeight":16,"lapisSpread":16}"""
+
 
 
 """
@@ -50,7 +52,17 @@ class SafeMineRLWrapper(gym.Wrapper):
             return self.env.reset(**kwargs)
         except Exception as e:
             print("MineRL reset crashed:", e)
-            return self.env.reset(**kwargs)
+
+            # HARD RESET strategy
+            import time
+            time.sleep(2)
+
+            try:
+                self.env.close()
+            except:
+                pass
+
+            raise e  # let outer system recreate env
 
 class PovImageWrapper(gym.ObservationWrapper):  # pyright: ignore[reportPrivateImportUsage]
   """Extract 'pov' from MineRL Dict obs, resize, and return as (C, H, W) uint8 image.
@@ -90,7 +102,33 @@ class RenderWrapper(gym.Wrapper):  # pyright: ignore[reportPrivateImportUsage]
     def step(self, action):
         self.env.render()
         return self.env.step(action)
+    
+class LookAtWoodRewardWrapper(gym.Wrapper):
 
+    LOOK_REWARD = 0.005  # small shaping reward
+
+    def step(self, action):
+        obs, reward, done, info = self.env.step(action)
+
+        obs_ray = obs.get("ray", {}).get("ray_data", {})
+        # print(f"Ray observation: {obs_ray}")
+
+        # depending on your schema, this might be:
+        # obs_ray["type"] OR obs_ray["hit_type"] + separate type
+        # block = obs_ray.get("type")
+        in_range = obs_ray.get("in_range", 0)
+
+        if any(obs_ray["type"].values()) and in_range == 1:
+            reward += self.LOOK_REWARD
+            # optional debug
+            # print(f"[LOOK] +{self.LOOK_REWARD} for looking at {obs_ray['type']}")
+        # elif block is not None:
+        #     # optional debug for looking at other blocks
+        #     print(f"[LOOK] No reward for looking at {block} (in_range={in_range})")
+        #     pass
+
+        return obs, reward, done, info
+    
 class MineBlockRewardWrapper(gym.Wrapper):
 
     LOG_ITEMS = {
@@ -107,10 +145,10 @@ class MineBlockRewardWrapper(gym.Wrapper):
         "dirt", "grass_block"
     }
 
-    LOG_REWARD = 10.0
-    LEAF_REWARD = 0.05
-    DIRT_PENALTY = 0.02
-    GRASS_PENALTY = 0.02
+    LOG_REWARD = 5.0
+    LEAF_REWARD = 0.001
+    DIRT_PENALTY = 0.01
+    GRASS_PENALTY = 0.01
 
     def __init__(self, env):
         super().__init__(env)
@@ -122,9 +160,9 @@ class MineBlockRewardWrapper(gym.Wrapper):
 
     def step(self, action):
         obs, reward, done, info = self.env.step(action)
-        reward -= 0.005
+        reward -= 0.001
 
-        obs_ray = obs.get("ray", {})
+        obs_ray = obs.get("ray", {}).get("ray_data", {})
         # print(f"Ray observation: {obs_ray.get('hit_type')}")
         mined = obs_ray.get("mine_block")
         # print(f"mine_block observation: {mined}")
@@ -161,7 +199,7 @@ class MineBlockRewardWrapper(gym.Wrapper):
 class StickyAttackWrapper(gym.Wrapper):
     def __init__(self, env, sticky_ticks=10):
         super().__init__(env)
-        self.sticky_ticks = sticky_ticks
+        self.sticky_ticks = 5
         self.attack_counter = 0
 
     def step(self, action):
@@ -232,6 +270,7 @@ class GatherWoodEnvironment(HumanControlEnvSpec):
         return [
             handlers.DefaultWorldGenerator(
                 force_reset=True,
+                # generator_options=TREECHOP_WORLD_GENERATOR_OPTIONS
             )
         ]
         # return [handlers.DefaultWorldGenerator(force_reset=True)]
@@ -251,7 +290,7 @@ class GatherWoodEnvironment(HumanControlEnvSpec):
           handlers.FOVSetting(70.0),
           handlers.FakeCursorSize(16),
           handlers.GuiScale(1),
-          handlers.PreferredSpawnBiome("forest"),
+          handlers.PreferredSpawnBiome("taiga"),
       ]
     
     @override
@@ -294,7 +333,7 @@ class GatherWoodEnvironment(HumanControlEnvSpec):
         return super().create_observables() + [
             handlers.ObservationFromCurrentLocation(),
             handlers.ObservationFromLifeStats(),
-            RayObservation(),
+            ObservationFromRay(),
         ]
 
     @override
