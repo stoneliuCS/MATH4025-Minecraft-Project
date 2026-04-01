@@ -7,7 +7,12 @@ class LSTMValue(nn.Module):
     def __init__(self, obs_dim, hidden_dim=64, num_layers=2):
         super().__init__()
         self.encoder = CNNEncoder()
-        self.lstm = nn.LSTM(input_size=obs_dim, hidden_size=hidden_dim, batch_first=True, num_layers=2)
+        self.lstm = nn.LSTM(
+            input_size=self.encoder.out_dim,
+            hidden_size=hidden_dim,
+            batch_first=True,
+            num_layers=2
+        )
         self.fc = nn.Linear(hidden_dim, 1)
  
     def forward(self, obs, hidden=None):

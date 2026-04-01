@@ -1,7 +1,9 @@
 import os 
 import sys
+import copy
 import random
 import logging
+from datetime import datetime
 
 import mlflow
 
@@ -18,7 +20,8 @@ from wrappers import GrayscaleWrapper, FrameStackWrapper
 from lstm_policy import LSTMPolicy
 from lstm_reward import LSTMRewardModel
 from preference_loss import preference_loss
-from rlhf_wrapper import RLHFActionWrapper
+from rlhf_wrapper import RLHFActionWrapper, print_info
+import rlhf_wrapper
 from lstm_value import LSTMValue
 
 
@@ -26,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 mlflow.set_experiment("RLHF Experiment 1")
 
-N_ACTIONS = 10
+N_ACTIONS = 11
 LEARNING_RATE = 0.00001
 BATCH_SIZE = 32
 N_FRAMES = 1
@@ -34,7 +37,7 @@ N_EPISODES = 200
 MAX_STEPS_PER_EPISODE = 100
 CHECKPOINT_FREQ = 5          # episodes
 CHECKPOINT_DIR =   "artifacts/rlhf"
-START_CHECKPOINT = "artifacts/rlhf/checkpoint_2.pt"
+START_CHECKPOINT = "none"
 N_REWARD_EPOCHS = 10
 N_RL_STEPS = 100
 POLICY_LR = 1e-3
@@ -48,12 +51,15 @@ ENTROPY_COEF = 0.01
 PPO_LR = 3e-4
 N_PPO_ROLLOUTS = 10
 MAX_ITERATIONS = 100
+N_POLICY_LAYERS = 4
+N_VALUE_NET_LAYERS = 2
+WORLD = "environment/worlds/rl_test_world_6.zip"
 
 def preprocess_state(state):
     state = torch.from_numpy(state.astype(np.float32) / 255.0)[0].flatten().unsqueeze(0)
     return state
 
-def collect_segment(policy, env):
+def collect_segment(policy, env, render = True):
     # act out a segment using the policy, and allow for the human viewer to view for judgement
 
     # hidden state for the LSTM
@@ -65,7 +71,8 @@ def collect_segment(policy, env):
     state = env.reset()
     for step in range(MAX_STEPS_PER_EPISODE):
         # render the frame for the
-        env.render()
+        if render:
+            env.render()
         obs = preprocess_state(state)
         logger.debug(f"obs.shape: {obs.shape}")
         with torch.no_grad():
@@ -74,13 +81,44 @@ def collect_segment(policy, env):
         obs_list.append(obs.squeeze())
         next_state, reward, done, info = env.step(action)
         state = next_state
+        if done:
+            break
+    final_info = info
     
     segment = torch.tensor(np.array(obs_list), dtype = torch.float32).unsqueeze(0)
-    return segment
+    return segment, copy.deepcopy(final_info)
 
-def get_human_preference():
-    preferred_segment = input("Which segment did you prefer (1 if you preferred the first segment, 0 for the second, and 0.5 for ties)?")
-    return torch.tensor([float(preferred_segment)])
+def get_human_preference(info_a, info_b):
+    print("="*30)
+    print(f"FIRST SEGMENT:")
+    print_info(info_a)
+    print("="*30)
+    print(f"SECOND SEGMENT:")
+    print_info(info_b)
+    print("="*30)
+    #preferred_segment = input("Which segment did you prefer (1 if you preferred the first segment, 0 for the second, and 0.5 for ties)?")
+    
+    pitch_a = rlhf_wrapper.average_pitch(info_a)
+    pitch_b = rlhf_wrapper.average_pitch(info_b)
+    
+    # we wish to train the model to look forward
+    if abs(pitch_a) > 25 or abs(pitch_b) > 25:
+        if abs(pitch_a) < abs(pitch_b):
+            logger.info("First Segment Preferred (pitch)")
+            return torch.tensor([1.0])
+        else:
+            logger.info ("Second Segment Preferred (pitch)")
+            return torch.tensor([0.0])
+    
+    # now we consider which one travelled farther if they both have good pitch
+    hdt_a = rlhf_wrapper.horizontal_distance_traveled(info_a)
+    hdt_b = rlhf_wrapper.horizontal_distance_traveled(info_b)
+    if hdt_a > hdt_b:
+        logger.info(f"First Segment Preferred (Distance Traveled={hdt_a})")
+        return torch.tensor([1.0])
+    else:
+        logger.info(f"Second Segment Preferred (Distance Traveled={hdt_b})")
+        return torch.tensor([0.0])
 
 
 def train(env):
@@ -94,59 +132,71 @@ def train(env):
     env = GrayscaleWrapper(env)
     env = FrameStackWrapper(env, N_FRAMES)
 
+    
+    # --- Initialize the policy and reward models
+    policy = LSTMPolicy(64 * 64, action_dim= N_ACTIONS, num_layers=N_POLICY_LAYERS)
+    reward_model = LSTMRewardModel(64 * 64, num_layers=N_POLICY_LAYERS)
+    # value network for PPO
+    value_net = LSTMValue(64 * 64, num_layers=N_VALUE_NET_LAYERS)
+
     # --- If the checkpoint path exists, then load the checkpoint
     if os.path.exists(START_CHECKPOINT):
-        pass
-
-    # --- Initialize the policy and reward models
-    policy = LSTMPolicy(64 * 64, action_dim= N_ACTIONS)
-    reward_model = LSTMRewardModel(64 * 64)
+        checkpoint = torch.load(START_CHECKPOINT)
+        policy.load_state_dict(checkpoint['policy'])
+        reward_model.load_state_dict(checkpoint['reward_model'])
+        value_net.load_state_dict(checkpoint['value_net'])
+        logger.info(f"loaded checkpoint from: {START_CHECKPOINT}")
 
     # --- Initialize optimizers
     policy_optimizer = optim.Adam(policy.parameters(), lr = POLICY_LR)
     reward_optimizer = optim.Adam(reward_model.parameters(), lr = REWARD_MODEL_LR)
 
+    
     with mlflow.start_run():
-
-        mlflow.log_params(
-            {
-            "n_actions": N_ACTIONS,
-            "learning_rate": LEARNING_RATE,
-            "batch_size": BATCH_SIZE,
-            "n_frames": N_FRAMES,
-            "n_episodes": N_EPISODES,
-            "max_steps_per_episode": MAX_STEPS_PER_EPISODE,
-            "checkpoint_freq": CHECKPOINT_FREQ,
-            "checkpoint_dir": CHECKPOINT_DIR,
-            "start_checkpoint" : START_CHECKPOINT,
-            "n_rl_steps": N_RL_STEPS,
-            "policy_lr": POLICY_LR,
-            "reward_model_lr": REWARD_MODEL_LR,
-            "ppo_epochs": PPO_EPOCHS,
-            "ppo_clip": PPO_CLIP,
-            "ppo_gamma": PPO_GAMMA,
-            "ppo_lambda": PPO_LAMBDA,
-            "value_coef": VALUE_COEF,
-            "entropy_coef": ENTROPY_COEF,
-            "ppo_lr": PPO_LR,
-            "n_ppo_rollouts": N_PPO_ROLLOUTS,
-            "max_iterations": MAX_ITERATIONS,
-            }
-        )
+        new_run = True
+        if new_run:
+            mlflow.log_params(
+                {
+                "n_actions": N_ACTIONS,
+                "learning_rate": LEARNING_RATE,
+                "batch_size": BATCH_SIZE,
+                "n_frames": N_FRAMES,
+                "n_episodes": N_EPISODES,
+                "max_steps_per_episode": MAX_STEPS_PER_EPISODE,
+                "checkpoint_freq": CHECKPOINT_FREQ,
+                "checkpoint_dir": CHECKPOINT_DIR,
+                "start_checkpoint" : START_CHECKPOINT,
+                "n_rl_steps": N_RL_STEPS,
+                "policy_lr": POLICY_LR,
+                "reward_model_lr": REWARD_MODEL_LR,
+                "ppo_epochs": PPO_EPOCHS,
+                "ppo_clip": PPO_CLIP,
+                "ppo_gamma": PPO_GAMMA,
+                "ppo_lambda": PPO_LAMBDA,
+                "value_coef": VALUE_COEF,
+                "entropy_coef": ENTROPY_COEF,
+                "ppo_lr": PPO_LR,
+                "n_ppo_rollouts": N_PPO_ROLLOUTS,
+                "max_iterations": MAX_ITERATIONS,
+                "n_policy_layers" : N_POLICY_LAYERS,
+                "n_value_net_layers" : N_VALUE_NET_LAYERS,
+                "world" : WORLD
+                }
+            )
         # keep track of steps for the various quantities that we track
-        logging_steps = 0
+        logging_steps = 20
 
         for itr in range(MAX_ITERATIONS):
             # --- Collect preference data and train reward model
             for epoch in range(N_REWARD_EPOCHS):
 
                 # collect two segments using the policy
-                seg_a = collect_segment(policy, env)
-                seg_b = collect_segment(policy, env)
+                seg_a, info_a = collect_segment(policy, env)
+                seg_b, info_b = collect_segment(policy, env)
                 logger.debug(f"seg_a.shape: {seg_a.shape}")
 
                 # get human preference of the two sequences that were observed
-                pref = get_human_preference()
+                pref = get_human_preference(info_a, info_b)
                 
                 # update the reward model
                 reward_optimizer.zero_grad()
@@ -155,7 +205,9 @@ def train(env):
                 reward_optimizer.step()
 
                 mlflow.log_metrics({
-                    "preference_loss" : loss.item()
+                    "preference_loss" : loss.item(),
+                    "average_pitch" : rlhf_wrapper.average_pitch(info_a),
+                    "horizontal distance traveled" : rlhf_wrapper.horizontal_distance_traveled(info_a)
                 }, step = logging_steps)
                 logging_steps += 1
 
@@ -165,9 +217,6 @@ def train(env):
 
             # --- The parameters of the policy are fit using PPO
             print("\nStarting PPO policy optimisation with learned reward model...")
-
-            # value network for PPO
-            value_net = LSTMValue(64 * 64)
         
             # Joint optimiser for policy + value net (standard PPO practice)
             ppo_optimizer = optim.Adam(
@@ -207,11 +256,13 @@ def train(env):
             # PPO Update completed
             # Save checkpoint
             print(f"Finished PPO rollouts\nSaving Checkpoint...")
+            now = datetime.now()
             torch.save({
                 "policy" : policy.state_dict(),
                 "value_net" : value_net.state_dict(), 
                 "reward_model" : reward_model.state_dict()
-            }, f"{CHECKPOINT_DIR}/checkpoint_{itr}.pt")
+            }, f'{CHECKPOINT_DIR}/checkpoint_{now.strftime("%H%M")}_{now.strftime("%d")}_{now.strftime("%m")}_{now.strftime("%Y")}.pt'
+            )
 
 
 # -----------------------------------------------------------

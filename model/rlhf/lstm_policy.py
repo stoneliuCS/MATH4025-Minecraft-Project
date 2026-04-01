@@ -10,7 +10,7 @@ class LSTMPolicy(nn.Module):
         super().__init__()
         self.encoder = CNNEncoder()
         self.lstm = nn.LSTM(
-            input_size=obs_dim,
+            input_size=self.encoder.out_dim,
             hidden_size=hidden_dim,
             batch_first=True,
             num_layers=num_layers
@@ -27,5 +27,5 @@ class LSTMPolicy(nn.Module):
             hidden: Updated LSTM hidden state tuple.
         """
         x = self.encoder(obs)
-        out, hidden = self.lstm(obs, hidden)
+        out, hidden = self.lstm(x, hidden)
         return self.fc(out), hidden  # (batch, T, action_dim)

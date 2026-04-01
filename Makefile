@@ -5,7 +5,8 @@ VENV_DIR := $(PROJECT_ROOT)/.venv
 VENV_ACTIVATE := $(VENV_DIR)/bin/activate
 
 # macOS Java 8 setup per README
-JAVA_HOME_8 := $(shell /usr/libexec/java_home -v 1.8 2>/dev/null)
+#JAVA_HOME_8 := $(shell /usr/libexec/java_home -v 1.8 2>/dev/null)
+JAVA_HOME_8 := /Library/Java/JavaVirtualMachines/temurin-8.jdk/Contents/Home
 
 # Prefer Python 3.10 or 3.9 per README
 PYTHON_BIN := $(shell command -v python3.10 || command -v python3.9 || command -v python3)

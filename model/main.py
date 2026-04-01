@@ -13,6 +13,7 @@ from minerl import *
 from .environment import create_environment
 from environment.simple_environment import BoxedNavigationSimpleEnvironment
 from environment.world_2 import World2Environment
+from environment.world import WorldEnvironment
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -58,8 +59,12 @@ def run_rlhf_training():
     spec.loader.exec_module(mod)
     rlhf = mod
 
-    env_name = "World2"
-    abs_box_env = World2Environment()
+    env_name = "NewWorld"
+    abs_box_env = WorldEnvironment(
+        world_path = "/Users/cjryan/Desktop/MATH4025-Minecraft-Project/environment/worlds/rl_test_world_6.zip"
+    )
+    #env_name = "World2"
+    #abs_box_env = World2Environment()
     abs_box_env.register()
 
     train_env = None

@@ -32,12 +32,20 @@ class CNNEncoder(nn.Module):
     def forward(self, obs_flat):
         """
         Args:
-            obs_flat: (batch, T, 64*64) — flattened greyscale frames.
+            obs_flat: (T, 64*64) — flattened greyscale frames.
         Returns:
-            features: (batch, T, out_dim)
+            features: (T, out_dim)
         """
-        batch, T, _ = obs_flat.shape
+        if len(obs_flat.shape) == 3:
+            batch, T, _ = obs_flat.shape
+        elif len(obs_flat.shape) == 2:
+            T, _ = obs_flat.shape
+            batch = 1
         # Reshape to treat every (batch, t) pair as an independent image
         x = obs_flat.view(batch * T, 1, 64, 64)
         x = self.net(x)                         # (batch*T, out_dim)
-        return x.view(batch, T, self.out_dim)   # (batch, T, out_dim)
+        if len(obs_flat.shape) == 3:
+            return x.view(batch, T, self.out_dim)   # (batch, T, out_dim)
+        elif len(obs_flat.shape) == 2:
+            return x.view(T, self.out_dim)   # (batch, T, out_dim)
+        

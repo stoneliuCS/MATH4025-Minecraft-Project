@@ -6,7 +6,12 @@ class LSTMRewardModel(nn.Module):
     def __init__(self, obs_dim, hidden_dim=64, num_layers=4):
         super().__init__()
         self.encoder = CNNEncoder()
-        self.lstm = nn.LSTM(input_size=obs_dim, hidden_size=hidden_dim, batch_first=True, num_layers=num_layers)
+        self.lstm = nn.LSTM(
+            input_size=self.encoder.out_dim,
+            hidden_size=hidden_dim,
+            batch_first=True,
+            num_layers=num_layers
+        )
         self.fc = nn.Linear(hidden_dim, 1)  # scalar reward output
 
     def forward(self, segment):
