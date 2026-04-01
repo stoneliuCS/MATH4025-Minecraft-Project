@@ -11,10 +11,10 @@ import minerl.herobraine.hero.handlers as handlers
 from typing_extensions import override
 from environment.ray import ObservationFromRay as RayObservation
 
-MAX_EPISODE_STEPS = 1000
+MAX_EPISODE_STEPS = 2000
 MAX_REWARD_THRESHOLD = 100
 FRAME_SIZE = 64
-CAMERA_MAX_ANGLE = 5.0
+CAMERA_MAX_ANGLE = 10.0
 ACTION_DIM = 8  # 2 camera + 5 discrete (forward, back, left, right, attack)
 LOG_ITEMS = [
     "oak_log",
@@ -110,13 +110,13 @@ class MineBlockRewardWrapper(gym.Wrapper):
 
     PENALTY_ITEMS = {"dirt", "grass_block"}
 
-    LOG_REWARD = 1.0
+    LOG_REWARD = 2.0
     LEAF_REWARD = 0.0001
     DIRT_PENALTY = 0.002
     GRASS_PENALTY = 0.002
-    ATTACK_LOG_REWARD = 0.1
+    ATTACK_LOG_REWARD = 0.2
     ATTACK_NONWOOD_PENALTY = 0.0
-    TIME_PENALTY = 0.0005
+    TIME_PENALTY = 0.0002
 
     def __init__(self, env):
         super().__init__(env)
