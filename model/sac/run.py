@@ -60,6 +60,9 @@ def run(
         logger.info(f"Resuming from checkpoint: {checkpoint}")
         model = SAC.load(checkpoint, env=env)
         model.learning_starts = model.num_timesteps + 500  # collect fresh steps before training on empty buffer
+        for param_group in model.policy.optimizer.param_groups:
+            param_group["lr"] = 1e-4
+        logger.info("Reduced learning rate to 1e-4 for resumed run")
     elif pretrained:
         logger.info(f"Loading pretrained BC weights: {pretrained}")
         model = SAC.load(pretrained, env=env)
