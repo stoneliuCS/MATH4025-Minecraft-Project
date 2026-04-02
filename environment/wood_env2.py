@@ -205,6 +205,10 @@ class StickyAttackWrapper(gym.Wrapper):
         self.sticky_ticks = sticky_ticks
         self.attack_counter = 0
 
+    def reset(self, **kwargs):
+        self.attack_counter = 0
+        return self.env.reset(**kwargs)
+
     def step(self, action):
         if action["attack"] == 1:
             self.attack_counter = self.sticky_ticks

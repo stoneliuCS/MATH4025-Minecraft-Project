@@ -2,6 +2,7 @@ import logging
 import os
 import time
 
+import torch
 from stable_baselines3 import SAC
 from stable_baselines3.common.callbacks import CallbackList, CheckpointCallback
 from stable_baselines3.common.monitor import Monitor
@@ -59,9 +60,14 @@ def run(
     if checkpoint:
         logger.info(f"Resuming from checkpoint: {checkpoint}")
         model = SAC.load(checkpoint, env=env)
+        # Abort early if checkpoint weights contain NaN
+        nan_params = [n for n, p in model.policy.named_parameters() if torch.isnan(p).any()]
+        if nan_params:
+            raise ValueError(f"Checkpoint has NaN weights in: {nan_params[:5]} — try an earlier checkpoint")
         model.learning_starts = model.num_timesteps + 500  # collect fresh steps before training on empty buffer
-        for param_group in model.policy.optimizer.param_groups:
-            param_group["lr"] = 1e-4
+        for optimizer in [model.policy.actor.optimizer, model.policy.critic.optimizer]:
+            for param_group in optimizer.param_groups:
+                param_group["lr"] = 1e-4
         logger.info("Reduced learning rate to 1e-4 for resumed run")
     elif pretrained:
         logger.info(f"Loading pretrained BC weights: {pretrained}")
