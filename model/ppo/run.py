@@ -75,7 +75,7 @@ def run(
         )
 
     checkpoint_cb = CheckpointCallback(
-        save_freq=20_000,
+        save_freq=10_000,
         save_path=checkpoint_out,
         name_prefix="ppo_wood",
     )
