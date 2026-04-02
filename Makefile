@@ -145,7 +145,11 @@ eval-checkpoints: env
 
 ppo: env
 	@JAVA_HOME="$(JAVA_HOME_8)" PATH="$(JAVA_HOME_8)/bin:$$PATH" \
-	"$(VENV_DIR)/bin/python" -m model.main --mode ppo $(if $(RENDER),--render,)
+	"$(VENV_DIR)/bin/python" -m model.main --mode ppo \
+	  $(if $(RENDER),--render,) \
+	  $(if $(CHECKPOINT),--checkpoint "$(CHECKPOINT)",) \
+	  $(if $(TIMESTEPS),--timesteps "$(TIMESTEPS)",) \
+	  $(if $(CHECKPOINT_OUT),--checkpoint-out "$(CHECKPOINT_OUT)",)
 
 interactor: env
 	@JAVA_HOME="$(JAVA_HOME_8)" PATH="$(JAVA_HOME_8)/bin:$$PATH" \

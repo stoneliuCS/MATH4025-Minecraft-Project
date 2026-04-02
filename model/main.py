@@ -276,7 +276,12 @@ if __name__ == "__main__":
     elif args.mode == "ppo":
         from model.ppo.run import run as train_ppo
 
-        train_ppo(render=args.render)
+        kwargs = dict(render=args.render, checkpoint=args.checkpoint)
+        if args.timesteps is not None:
+            kwargs["timesteps"] = args.timesteps
+        if args.checkpoint_out is not None:
+            kwargs["checkpoint_out"] = args.checkpoint_out
+        train_ppo(**kwargs)
     elif args.mode == "sac":
         from model.sac.run import run as run_sac
 
