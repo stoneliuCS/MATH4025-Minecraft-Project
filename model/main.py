@@ -11,7 +11,7 @@ import gym
 
 
 
-from .environment import create_environment
+from .environment import create_environment, create_environment_rlhf
 from environment.simple_environment import BoxedNavigationSimpleEnvironment
 from environment.world_2 import World2Environment
 from environment.world import WorldEnvironment
@@ -61,24 +61,18 @@ def run_rlhf_training():
     rlhf = mod
 
     
-    env_name = "NewWorld"
-    abs_box_env = WorldEnvironment(
-        world_path = "/Users/cjryan/Desktop/MATH4025-Minecraft-Project/environment/worlds/rl_test_world_6.zip"
-    )
-  
-    #env_name = "World2"
-    #abs_box_env = World2Environment()
+    #env_name = "NewWorld"
+    #abs_box_env = WorldEnvironment(
+    #    world_path = "/Users/cjryan/Desktop/MATH4025-Minecraft-Project/environment/worlds/rl_test_world_6.zip"
+    #)
     
-    abs_box_env.register()
+    #abs_box_env.register()
 
     #train_env = None
-    try: 
-        train_env = create_environment(env_name, interactive=True)
+    #train_env = create_environment(env_name, interactive=True)
         
-        rlhf.train(train_env)
-    finally:
-        if train_env is not None:
-            train_env.close()
+    rlhf.train(create_environment_rlhf)
+    
 
 
     #env = gym.make("MineRLBasaltFindCave-v0")

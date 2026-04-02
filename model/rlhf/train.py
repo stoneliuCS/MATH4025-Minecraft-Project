@@ -1,6 +1,7 @@
 import os 
 import sys
 import copy
+import time
 import random
 import logging
 from datetime import datetime
@@ -53,6 +54,7 @@ N_PPO_ROLLOUTS = 50
 MAX_ITERATIONS = 100
 N_POLICY_LAYERS = 4
 N_VALUE_NET_LAYERS = 2
+ENV_RESET_INTERVAL = 20
 
 def preprocess_state(state):
     state = torch.from_numpy(state.astype(np.float32) / 255.0)[0].flatten().unsqueeze(0)
@@ -88,13 +90,14 @@ def collect_segment(policy, env, render = True):
     return segment, copy.deepcopy(final_info['location_stat_history'])
 
 
-def train(env):
+def train(create_env):
     '''
     
         The main training loop for DPO model
     
     '''
-
+    # create the environment for the first time
+    env = create_env(interactive = False, realtime = False)
     env = RLHFActionWrapper(env)
     env = GrayscaleWrapper(env)
     env = FrameStackWrapper(env, N_FRAMES)
@@ -118,8 +121,12 @@ def train(env):
     checkpoint_paths = []
 
     # --- Initialize optimizers
-    policy_optimizer = optim.Adam(policy.parameters(), lr = POLICY_LR)
     reward_optimizer = optim.Adam(reward_model.parameters(), lr = REWARD_MODEL_LR)
+    # Joint optimiser for policy + value net (standard PPO practice)
+    ppo_optimizer = optim.Adam(
+        list(policy.parameters()) + list(value_net.parameters()),
+        lr=PPO_LR
+    )
 
     
     with mlflow.start_run():
@@ -160,6 +167,19 @@ def train(env):
             # --- Collect preference data and train reward model
             for epoch in range(N_REWARD_EPOCHS):
 
+                # reset the environment every so often
+                if epoch > 0 and epoch % ENV_RESET_INTERVAL == 0:
+                    logger.debug(f"Resetting environment...")
+                    env.close()
+                    time.sleep(5)
+                    env = create_env(interactive = False, realtime = False)
+                    env = RLHFActionWrapper(env)
+                    env = GrayscaleWrapper(env)
+                    env = FrameStackWrapper(env, N_FRAMES)
+                    logger.debug(f"Created new environment!")
+
+
+
                 # collect two segments using the policy
                 seg_a, info_a = collect_segment(policy, env, render = False)
                 seg_b, info_b = collect_segment(policy, env, render = False)
@@ -185,20 +205,26 @@ def train(env):
                 logging_steps += 1
 
                 # print out training update for the reward model
-                if epoch % 10 == 0:
-                    print(f"  Epoch {epoch:3d} | Reward model loss: {loss.item():.4f}")
+                print(f"  Epoch {epoch:3d} | Reward model loss: {loss.item():.4f}")
 
             # --- The parameters of the policy are fit using PPO
             print("\nStarting PPO policy optimisation with learned reward model...")
         
-            # Joint optimiser for policy + value net (standard PPO practice)
-            ppo_optimizer = optim.Adam(
-                list(policy.parameters()) + list(value_net.parameters()),
-                lr=PPO_LR
-            )
+            
 
             # do PPO rollouts using reward model
             for rollout_idx in range(N_PPO_ROLLOUTS):
+                # reset the environment every so often
+                if epoch > 0 and epoch % ENV_RESET_INTERVAL == 0:
+                    logger.debug(f"Resetting environment...")
+                    env.close()
+                    time.sleep(5)
+                    env = create_env(interactive = False, realtime = False)
+                    env = RLHFActionWrapper(env)
+                    env = GrayscaleWrapper(env)
+                    env = FrameStackWrapper(env, N_FRAMES)
+                    logger.debug(f"Created new environment!")
+                    
                 logger.debug(f"PPO rollout {rollout_idx}")
         
                 # 1. Collect one episode of experience using the current policy
