@@ -10,6 +10,7 @@ from stable_baselines3.common.vec_env import DummyVecEnv, VecFrameStack, VecNorm
 from environment.wood_env2 import GatherWoodEnvironment
 from model.callbacks import RewardPlotCallback
 from model.environment import make_wood_env
+from shimmy.openai_gym_compatibility import GymV21CompatibilityV0
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +38,7 @@ def run(
 
     def _make():
         env = make_wood_env(env_name, render=render, interactive=True)
+        env = GymV21CompatibilityV0(env_id=env_name, env=env)
         return Monitor(env, filename=monitor_path)
 
     env = DummyVecEnv([_make])
