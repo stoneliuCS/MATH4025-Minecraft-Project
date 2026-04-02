@@ -4,6 +4,7 @@ import importlib.util
 import os
 import time
 from minerl import *
+import gym
 #from environment.restricted_wrapper import RestrictedActionWrapper
 #from environment.distance_wrapper import DistanceActionWrapper
 
@@ -59,15 +60,18 @@ def run_rlhf_training():
     spec.loader.exec_module(mod)
     rlhf = mod
 
+    
     env_name = "NewWorld"
     abs_box_env = WorldEnvironment(
         world_path = "/Users/cjryan/Desktop/MATH4025-Minecraft-Project/environment/worlds/rl_test_world_6.zip"
     )
+  
     #env_name = "World2"
     #abs_box_env = World2Environment()
+    
     abs_box_env.register()
 
-    train_env = None
+    #train_env = None
     try: 
         train_env = create_environment(env_name, interactive=True)
         
@@ -75,6 +79,12 @@ def run_rlhf_training():
     finally:
         if train_env is not None:
             train_env.close()
+
+
+    #env = gym.make("MineRLBasaltFindCave-v0")
+    #rlhf.train(env)
+
+    
 
 
 

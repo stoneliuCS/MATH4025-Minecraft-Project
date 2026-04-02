@@ -3,6 +3,7 @@ from minerl.herobraine.env_specs.basalt_specs import HumanControlEnvSpec
 from minerl.herobraine.hero.handler import Handler
 import minerl.herobraine.hero.handlers as handlers
 from typing_extensions import override
+from environment.ray import ObservationFromRay
 
 DOC = """
 This environment creates a very controlled, simple boxed world where the agent must navigate to find a simple cube.
@@ -100,7 +101,8 @@ class WorldEnvironment(HumanControlEnvSpec):
     def create_observables(self) -> list[TranslationHandler]:
         return super().create_observables() + [
             handlers.ObservationFromCurrentLocation(),
-            handlers.ObservationFromLifeStats()
+            handlers.ObservationFromLifeStats(),
+            ObservationFromRay()
         ]
 
     @override

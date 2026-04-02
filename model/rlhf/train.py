@@ -53,7 +53,6 @@ N_PPO_ROLLOUTS = 10
 MAX_ITERATIONS = 100
 N_POLICY_LAYERS = 4
 N_VALUE_NET_LAYERS = 2
-WORLD = "environment/worlds/rl_test_world_6.zip"
 
 def preprocess_state(state):
     state = torch.from_numpy(state.astype(np.float32) / 255.0)[0].flatten().unsqueeze(0)
@@ -153,38 +152,35 @@ def train(env):
 
     
     with mlflow.start_run():
-        new_run = True
-        if new_run:
-            mlflow.log_params(
-                {
-                "n_actions": N_ACTIONS,
-                "learning_rate": LEARNING_RATE,
-                "batch_size": BATCH_SIZE,
-                "n_frames": N_FRAMES,
-                "n_episodes": N_EPISODES,
-                "max_steps_per_episode": MAX_STEPS_PER_EPISODE,
-                "checkpoint_freq": CHECKPOINT_FREQ,
-                "checkpoint_dir": CHECKPOINT_DIR,
-                "start_checkpoint" : START_CHECKPOINT,
-                "n_rl_steps": N_RL_STEPS,
-                "policy_lr": POLICY_LR,
-                "reward_model_lr": REWARD_MODEL_LR,
-                "ppo_epochs": PPO_EPOCHS,
-                "ppo_clip": PPO_CLIP,
-                "ppo_gamma": PPO_GAMMA,
-                "ppo_lambda": PPO_LAMBDA,
-                "value_coef": VALUE_COEF,
-                "entropy_coef": ENTROPY_COEF,
-                "ppo_lr": PPO_LR,
-                "n_ppo_rollouts": N_PPO_ROLLOUTS,
-                "max_iterations": MAX_ITERATIONS,
-                "n_policy_layers" : N_POLICY_LAYERS,
-                "n_value_net_layers" : N_VALUE_NET_LAYERS,
-                "world" : WORLD
-                }
-            )
+        mlflow.log_params(
+            {
+            "n_actions": N_ACTIONS,
+            "learning_rate": LEARNING_RATE,
+            "batch_size": BATCH_SIZE,
+            "n_frames": N_FRAMES,
+            "n_episodes": N_EPISODES,
+            "max_steps_per_episode": MAX_STEPS_PER_EPISODE,
+            "checkpoint_freq": CHECKPOINT_FREQ,
+            "checkpoint_dir": CHECKPOINT_DIR,
+            "start_checkpoint" : START_CHECKPOINT,
+            "n_rl_steps": N_RL_STEPS,
+            "policy_lr": POLICY_LR,
+            "reward_model_lr": REWARD_MODEL_LR,
+            "ppo_epochs": PPO_EPOCHS,
+            "ppo_clip": PPO_CLIP,
+            "ppo_gamma": PPO_GAMMA,
+            "ppo_lambda": PPO_LAMBDA,
+            "value_coef": VALUE_COEF,
+            "entropy_coef": ENTROPY_COEF,
+            "ppo_lr": PPO_LR,
+            "n_ppo_rollouts": N_PPO_ROLLOUTS,
+            "max_iterations": MAX_ITERATIONS,
+            "n_policy_layers" : N_POLICY_LAYERS,
+            "n_value_net_layers" : N_VALUE_NET_LAYERS,
+            }
+        )
         # keep track of steps for the various quantities that we track
-        logging_steps = 20
+        logging_steps = 0
 
         for itr in range(MAX_ITERATIONS):
             # --- Collect preference data and train reward model

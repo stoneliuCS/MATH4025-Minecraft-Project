@@ -26,12 +26,7 @@ class RLHFActionWrapper(gym.ActionWrapper):
         return self.env.reset(**kwargs)
     
     def create_agent_start(self):
-        return [
-            # make the agent start with these items
-            handlers.SimpleInventoryAgentStart([
-                dict(type="diamond_axe", quantity=1)
-            ])
-        ]
+        return []
 
 
     def format_action(self, action_idx):
@@ -39,11 +34,7 @@ class RLHFActionWrapper(gym.ActionWrapper):
         """
         # Build dict with all movement keys set to 0
         formatted = {
-        #    "forward": 0,
-        #    "back": 0,
-        #    "left": 0,
-        #    "right": 0,
-        #    "camera": [0,0]
+            "ESC" : 0
         }
 
         if action_idx==0:
@@ -77,6 +68,9 @@ class RLHFActionWrapper(gym.ActionWrapper):
         # Convert discrete action index to dict before passing to underlying env
         converted_action = self.format_action(action)
         obs, reward, done, info = self.env.step(converted_action)
+
+        if 'ray' in obs: 
+            print(obs['ray'])
         
         if 'location_stats' in obs:
             x = obs['location_stats']['xpos']
