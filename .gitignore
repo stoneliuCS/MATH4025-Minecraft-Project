@@ -15,6 +15,9 @@ world/
 libraries/
 versions/
 
+environment/worlds/*
+artifacts/*
+
 RaspberryJuice
 
 bukkit.yml
@@ -31,3 +34,8 @@ bundler/
 HeadlessMC/
 minerl/
 __pycache__
+
+mlflow.db
+artifacts/rlhf/*
+artifacts/*
+mlruns

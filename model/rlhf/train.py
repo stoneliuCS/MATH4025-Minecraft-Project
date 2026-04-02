@@ -23,7 +23,7 @@ from preference_loss import preference_loss
 from rlhf_wrapper import RLHFActionWrapper, print_info
 import rlhf_wrapper
 from lstm_value import LSTMValue
-
+from generate_preference import get_human_preference
 
 logger = logging.getLogger(__name__)
 
@@ -38,10 +38,10 @@ MAX_STEPS_PER_EPISODE = 100
 CHECKPOINT_FREQ = 5          # episodes
 CHECKPOINT_DIR =   "artifacts/rlhf"
 START_CHECKPOINT = "none"
-N_REWARD_EPOCHS = 10
+N_REWARD_EPOCHS = 50
 N_RL_STEPS = 100
-POLICY_LR = 1e-3
-REWARD_MODEL_LR = 1e-3
+POLICY_LR = 0.0001
+REWARD_MODEL_LR = 0.0001
 PPO_EPOCHS = 4
 PPO_CLIP = 0.2
 PPO_GAMMA = 0.99
@@ -49,7 +49,7 @@ PPO_LAMBDA = 0.95
 VALUE_COEF = 0.5
 ENTROPY_COEF = 0.01
 PPO_LR = 3e-4
-N_PPO_ROLLOUTS = 10
+N_PPO_ROLLOUTS = 50
 MAX_ITERATIONS = 100
 N_POLICY_LAYERS = 4
 N_VALUE_NET_LAYERS = 2
@@ -85,39 +85,7 @@ def collect_segment(policy, env, render = True):
     final_info = info
     
     segment = torch.tensor(np.array(obs_list), dtype = torch.float32).unsqueeze(0)
-    return segment, copy.deepcopy(final_info)
-
-def get_human_preference(info_a, info_b):
-    print("="*30)
-    print(f"FIRST SEGMENT:")
-    print_info(info_a)
-    print("="*30)
-    print(f"SECOND SEGMENT:")
-    print_info(info_b)
-    print("="*30)
-    #preferred_segment = input("Which segment did you prefer (1 if you preferred the first segment, 0 for the second, and 0.5 for ties)?")
-    
-    pitch_a = rlhf_wrapper.average_pitch(info_a)
-    pitch_b = rlhf_wrapper.average_pitch(info_b)
-    
-    # we wish to train the model to look forward
-    if abs(pitch_a) > 25 or abs(pitch_b) > 25:
-        if abs(pitch_a) < abs(pitch_b):
-            logger.info("First Segment Preferred (pitch)")
-            return torch.tensor([1.0])
-        else:
-            logger.info ("Second Segment Preferred (pitch)")
-            return torch.tensor([0.0])
-    
-    # now we consider which one travelled farther if they both have good pitch
-    hdt_a = rlhf_wrapper.horizontal_distance_traveled(info_a)
-    hdt_b = rlhf_wrapper.horizontal_distance_traveled(info_b)
-    if hdt_a > hdt_b:
-        logger.info(f"First Segment Preferred (Distance Traveled={hdt_a})")
-        return torch.tensor([1.0])
-    else:
-        logger.info(f"Second Segment Preferred (Distance Traveled={hdt_b})")
-        return torch.tensor([0.0])
+    return segment, copy.deepcopy(final_info['location_stat_history'])
 
 
 def train(env):
@@ -135,7 +103,7 @@ def train(env):
     # --- Initialize the policy and reward models
     policy = LSTMPolicy(64 * 64, action_dim= N_ACTIONS, num_layers=N_POLICY_LAYERS)
     reward_model = LSTMRewardModel(64 * 64, num_layers=N_POLICY_LAYERS)
-    # value network for PPO
+    # value network for PPO. This is not necessarily part of the RLHF
     value_net = LSTMValue(64 * 64, num_layers=N_VALUE_NET_LAYERS)
 
     # --- If the checkpoint path exists, then load the checkpoint
@@ -145,6 +113,9 @@ def train(env):
         reward_model.load_state_dict(checkpoint['reward_model'])
         value_net.load_state_dict(checkpoint['value_net'])
         logger.info(f"loaded checkpoint from: {START_CHECKPOINT}")
+    
+    # --- remember the paths of all the checkpoints that were saved during this run
+    checkpoint_paths = []
 
     # --- Initialize optimizers
     policy_optimizer = optim.Adam(policy.parameters(), lr = POLICY_LR)
@@ -179,6 +150,9 @@ def train(env):
             "n_value_net_layers" : N_VALUE_NET_LAYERS,
             }
         )
+        # log the file that is used to generate artificial human preferences
+        mlflow.log_artifact("model/rlhf/generate_preference.py")
+        
         # keep track of steps for the various quantities that we track
         logging_steps = 0
 
@@ -187,9 +161,13 @@ def train(env):
             for epoch in range(N_REWARD_EPOCHS):
 
                 # collect two segments using the policy
-                seg_a, info_a = collect_segment(policy, env)
-                seg_b, info_b = collect_segment(policy, env)
+                seg_a, info_a = collect_segment(policy, env, render = False)
+                seg_b, info_b = collect_segment(policy, env, render = False)
                 logger.debug(f"seg_a.shape: {seg_a.shape}")
+
+                # log the preference metrics for segment a
+                mlflow.log_metrics(rlhf_wrapper.get_preference_metrics(info_b), step = logging_steps)
+
 
                 # get human preference of the two sequences that were observed
                 pref = get_human_preference(info_a, info_b)
@@ -200,10 +178,9 @@ def train(env):
                 loss.backward()
                 reward_optimizer.step()
 
+                # log the preference loss for the reward model
                 mlflow.log_metrics({
                     "preference_loss" : loss.item(),
-                    "average_pitch" : rlhf_wrapper.average_pitch(info_a),
-                    "horizontal distance traveled" : rlhf_wrapper.horizontal_distance_traveled(info_a)
                 }, step = logging_steps)
                 logging_steps += 1
 
@@ -225,8 +202,10 @@ def train(env):
                 logger.debug(f"PPO rollout {rollout_idx}")
         
                 # 1. Collect one episode of experience using the current policy
-                rollout = collect_ppo_rollout(policy, value_net, reward_model, env)
+                rollout, info = collect_ppo_rollout(policy, value_net, reward_model, env)
                 logger.debug(f"collected rollout...")
+                # log the info for this rollout
+                mlflow.log_metrics(rlhf_wrapper.get_preference_metrics(info), step = logging_steps)
         
                 # 2. Run PPO update passes over that experience
                 p_loss, v_loss, entropy = ppo_update(policy, value_net, ppo_optimizer, rollout)
@@ -253,12 +232,18 @@ def train(env):
             # Save checkpoint
             print(f"Finished PPO rollouts\nSaving Checkpoint...")
             now = datetime.now()
+            run_name = mlflow.active_run().data.tags.get("mlflow.runName")
+            os.makedirs(f'{CHECKPOINT_DIR}/{run_name}')
+            checkpoint_path = f'{CHECKPOINT_DIR}/{run_name}/checkpoint_{now.strftime("%M")}.{now.strftime("%H")}.{now.strftime("%d")}.{now.strftime("%m")}.{now.strftime("%Y")}.pt'
             torch.save({
                 "policy" : policy.state_dict(),
                 "value_net" : value_net.state_dict(), 
                 "reward_model" : reward_model.state_dict()
-            }, f'{CHECKPOINT_DIR}/checkpoint_{now.strftime("%H%M")}_{now.strftime("%d")}_{now.strftime("%m")}_{now.strftime("%Y")}.pt'
+            }, checkpoint_path
             )
+            checkpoint_paths.append(checkpoint_path)
+            # log this checkpoint with MLFlow
+            mlflow.log_text("\n".join(checkpoint_paths), "checkpoint_paths.txt")
 
 
 # -----------------------------------------------------------
@@ -295,7 +280,7 @@ def collect_ppo_rollout(policy, value_net, reward_model, env):
         logprob_list.append(logprob)
         value_list.append(value.squeeze())
  
-        next_state, _, done, _ = env.step(action.item())
+        next_state, _, done, info = env.step(action.item())
         done_list.append(done)
         state = next_state
         if done:
@@ -319,7 +304,7 @@ def collect_ppo_rollout(policy, value_net, reward_model, env):
         "values":   torch.stack(value_list),              # (T,)
         "rewards":  reward_list,                          # (T,)
         "dones":    torch.tensor(done_list, dtype=torch.float32),  # (T,)
-    }
+    }, info['location_stat_history']
 
 def compute_gae(rewards, values, dones, gamma=PPO_GAMMA, lam=PPO_LAMBDA):
     """
