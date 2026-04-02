@@ -33,3 +33,5 @@ minerl/
 __pycache__
 data/
 venv-data/
+artifacts/sac
+monitor*
