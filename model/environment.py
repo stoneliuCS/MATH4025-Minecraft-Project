@@ -20,3 +20,28 @@ def create_environment(objective: str, interactive: bool = False) -> Env:
             "Interactive mode enabled. Minecraft client should connect automatically."
         )
     return env
+
+
+def make_wood_env(env_name: str, render: bool = False, interactive: bool = True, sticky_ticks: int = 5) -> Env:
+    """
+    Shared wrapper stack for both SAC and PPO. Returns env wrapped through ActionWrapper.
+    Callers add algorithm-specific wrappers (Monitor, VecEnv, GymV21, etc.) on top.
+    """
+    from environment.wood_env2 import (
+        ActionWrapper,
+        MineBlockRewardWrapper,
+        PovImageWrapper,
+        RenderWrapper,
+        StickyAttackWrapper,
+    )
+    from environment.wrappers import RobustResetWrapper
+
+    env = create_environment(env_name, interactive=interactive)
+    env = RobustResetWrapper(env, env_name=env_name)
+    env = MineBlockRewardWrapper(env)
+    env = StickyAttackWrapper(env, sticky_ticks=sticky_ticks)
+    if render:
+        env = RenderWrapper(env)
+    env = PovImageWrapper(env)
+    env = ActionWrapper(env)
+    return env

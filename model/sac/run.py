@@ -7,19 +7,11 @@ from stable_baselines3 import SAC
 from stable_baselines3.common.callbacks import CallbackList, CheckpointCallback
 from stable_baselines3.common.monitor import Monitor
 
-from environment.wood_env2 import (
-    ActionWrapper,
-    GatherWoodEnvironment,
-    MineBlockRewardWrapper,
-    PovImageWrapper,
-    RenderWrapper,
-    StickyAttackWrapper,
-)
-from environment.wrappers import RobustResetWrapper
+from environment.wood_env2 import GatherWoodEnvironment
 from shimmy.openai_gym_compatibility import GymV21CompatibilityV0
 from model.sac.callbacks import RewardPlotCallback
 from model.sac.replay_buffer import NStepReplayBuffer
-from model.environment import create_environment
+from model.environment import make_wood_env
 
 logger = logging.getLogger(__name__)
 
@@ -42,14 +34,7 @@ def run(
     wood_env = GatherWoodEnvironment()
     wood_env.register()
 
-    env = create_environment(env_name, interactive=True)
-    env = RobustResetWrapper(env, env_name=env_name)
-    env = MineBlockRewardWrapper(env)
-    env = StickyAttackWrapper(env, sticky_ticks=5)
-    if render:
-        env = RenderWrapper(env)
-    env = PovImageWrapper(env)
-    env = ActionWrapper(env)
+    env = make_wood_env(env_name, render=render, interactive=True)
     env = GymV21CompatibilityV0(
         env_id=env_name, env=env
     )  # convert old gym → gymnasium at the boundary for SB3/Monitor

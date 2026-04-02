@@ -4,19 +4,11 @@ import os
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import CheckpointCallback
 
-from environment.wood_env2 import (
-    GatherWoodEnvironment,
-    MineBlockRewardWrapper,
-    PovImageWrapper,
-    RenderWrapper,
-    ActionWrapper,
-    StickyAttackWrapper,
-    SafeMineRLWrapper
-)
+from environment.wood_env2 import GatherWoodEnvironment
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.vec_env import DummyVecEnv, VecFrameStack, VecNormalize
 
-from model.environment import create_environment
+from model.environment import make_wood_env
 
 logger = logging.getLogger(__name__)
 
@@ -86,37 +78,16 @@ TENSORBOARD_LOG = "./tensorboard_logs4/"
 #     logger.info(f"Training complete. Model saved to {MODEL_PATH}")
 #     env.close()
 
-def make_env(render=False):
+def run(render: bool = False):
     env_name = "GatherWood-v0"
     wood_env = GatherWoodEnvironment()
     wood_env.register()
 
-    env = create_environment(env_name, interactive=True)
-
-    # env = SafeMineRLWrapper(env)  # ✅ new
-
-    env = MineBlockRewardWrapper(env)
-    env = StickyAttackWrapper(env, sticky_ticks=15)
-
-    if render:
-        env = RenderWrapper(env)
-
-    env = PovImageWrapper(env)
-    env = ActionWrapper(env)
-
-    # Required for reward logging
-    env = Monitor(env)
-
-    return env
-
-
-def run(render: bool = False):
     os.makedirs("artifacts", exist_ok=True)
     os.makedirs(TENSORBOARD_LOG, exist_ok=True)
 
-
     n_envs = 1
-    env = DummyVecEnv([lambda: make_env(render=False) for _ in range(n_envs)])
+    env = DummyVecEnv([lambda: Monitor(make_wood_env(env_name, render=render, interactive=True)) for _ in range(n_envs)])
     env = VecFrameStack(env, n_stack=4)
     env = VecNormalize(env, norm_obs=False, norm_reward=False)
 
