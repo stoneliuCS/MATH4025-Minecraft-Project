@@ -6,6 +6,7 @@ import torch
 from stable_baselines3 import SAC
 from stable_baselines3.common.callbacks import CallbackList, CheckpointCallback
 from stable_baselines3.common.monitor import Monitor
+from stable_baselines3.common.vec_env import DummyVecEnv, VecFrameStack
 
 from environment.wood_env2 import GatherWoodEnvironment
 from shimmy.openai_gym_compatibility import GymV21CompatibilityV0
@@ -34,11 +35,15 @@ def run(
     wood_env = GatherWoodEnvironment()
     wood_env.register()
 
-    env = make_wood_env(env_name, render=render, interactive=True)
-    env = GymV21CompatibilityV0(
-        env_id=env_name, env=env
-    )  # convert old gym → gymnasium at the boundary for SB3/Monitor
-    env = Monitor(env, filename=os.path.join(checkpoint_out, f"monitor_{int(time.time())}"))
+    monitor_path = os.path.join(checkpoint_out, f"monitor_{int(time.time())}")
+
+    def _make():
+        e = make_wood_env(env_name, render=render, interactive=True)
+        e = GymV21CompatibilityV0(env_id=env_name, env=e)
+        return Monitor(e, filename=monitor_path)
+
+    env = DummyVecEnv([_make])
+    env = VecFrameStack(env, n_stack=4)
 
     os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
 
