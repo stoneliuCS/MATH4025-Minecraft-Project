@@ -38,23 +38,30 @@ N_EPISODES = 200
 MAX_STEPS_PER_EPISODE = 100
 CHECKPOINT_FREQ = 5          # episodes
 CHECKPOINT_DIR =   "artifacts/rlhf"
-START_CHECKPOINT = "none"
-N_REWARD_EPOCHS = 50
+START_CHECKPOINT = "/Users/cjryan/Desktop/MATH4025-Minecraft-Project/artifacts/rlhf/grandiose-zebra-391/checkpoint_02.15.02.04.2026.pt"
+N_REWARD_EPOCHS = 10
+N_PREF_ITERATIONS = 10 # the number of preferences that will be generated for each reward epoch
+N_REWARD_STEPS = 5 # the number of steps that the reward model will be optimized
 N_RL_STEPS = 100
 POLICY_LR = 0.0001
-REWARD_MODEL_LR = 0.0001
+REWARD_MODEL_LR = 0.00001
 PPO_EPOCHS = 4
 PPO_CLIP = 0.2
 PPO_GAMMA = 0.99
 PPO_LAMBDA = 0.95
 VALUE_COEF = 0.5
 ENTROPY_COEF = 0.01
-PPO_LR = 3e-4
+PPO_LR = 0.00005
 N_PPO_ROLLOUTS = 50
 MAX_ITERATIONS = 100
 N_POLICY_LAYERS = 4
 N_VALUE_NET_LAYERS = 2
 ENV_RESET_INTERVAL = 20
+
+# keep track of steps for the various quantities that we track
+logging_steps = 0
+ppo_rollout_steps = 50
+reward_optimization_steps = 50
 
 def preprocess_state(state):
     state = torch.from_numpy(state.astype(np.float32) / 255.0)[0].flatten().unsqueeze(0)
@@ -89,6 +96,55 @@ def collect_segment(policy, env, render = True):
     segment = torch.tensor(np.array(obs_list), dtype = torch.float32).unsqueeze(0)
     return segment, copy.deepcopy(final_info['location_stat_history'])
 
+def reward_model_epoch(env, policy, reward_model, reward_optimizer):
+    global logging_steps
+    global reward_optimization_steps
+
+    # --- Collect a batch of preference pairs over N_PREF_ITERATIONS ---
+    batch_seg_a, batch_seg_b, batch_prefs = [], [], []
+    for pref_iter in range(N_PREF_ITERATIONS):
+        # --- Collect a batch of preferences
+        seg_a, info_a = collect_segment(policy, env, render=False)
+        seg_b, info_b = collect_segment(policy, env, render=False)
+        logger.debug(f"[Pref iter {pref_iter}] seg_a.shape: {seg_a.shape}")
+
+        # log the preference metrics for segment b
+        #mlflow.log_metrics(rlhf_wrapper.get_preference_metrics(info_b), step=logging_steps)
+
+        # get human preference for this pair and accumulate
+        pref = get_human_preference(info_a, info_b)
+        batch_seg_a.append(seg_a)
+        batch_seg_b.append(seg_b)
+        batch_prefs.append(pref)
+    
+    # -- Convert our segments and preferences to tensors
+    batch_seg_a = torch.stack([torch.tensor(s, dtype=torch.float32) for s in batch_seg_a]).squeeze(1)
+    batch_seg_b = torch.stack([torch.tensor(s, dtype=torch.float32) for s in batch_seg_b]).squeeze(1)
+    batch_prefs = torch.tensor(batch_prefs, dtype=torch.float32)
+    
+    # --- save this preference batch
+    #now = datetime.now()
+    #torch.save({
+    #    "segment_a" : batch_seg_a,
+    #    "segment_b" : batch_seg_b,
+    #    "preference" : batch_prefs
+    #}, f'artifacts/rlhf/saved_preferences/batch_{now.strftime("%M")}.{now.strftime("%H")}.{now.strftime("%d")}.{now.strftime("%m")}.{now.strftime("%Y")}.pt')
+
+    # --- Optimize the reward model using the preference data that was just collected
+    for reward_step in range(N_REWARD_STEPS):
+        logger.info(f"optimizing reward model (step {reward_step})")
+        reward_optimizer.zero_grad()
+        logger.debug(f"batch_seg_a.shape: {batch_seg_a.shape}")
+        loss = preference_loss(reward_model, batch_seg_a, batch_seg_b, batch_prefs)
+        loss.backward()
+        reward_optimizer.step()
+
+        # log the preference loss for the reward model
+        mlflow.log_metrics({
+            "reward_model_loss": loss.item(),
+        }, step=reward_optimization_steps)
+        reward_optimization_steps += 1
+
 
 def train(create_env):
     '''
@@ -96,6 +152,8 @@ def train(create_env):
         The main training loop for DPO model
     
     '''
+    global ppo_rollout_steps
+    
     # create the environment for the first time
     env = create_env(interactive = False, realtime = False)
     env = RLHFActionWrapper(env)
@@ -129,7 +187,8 @@ def train(create_env):
     )
 
     
-    with mlflow.start_run():
+    with mlflow.start_run(run_id = "6a9e98a708d14b18bafdbb8d7b7e5cff"):
+        '''
         mlflow.log_params(
             {
             "n_actions": N_ACTIONS,
@@ -155,67 +214,42 @@ def train(create_env):
             "max_iterations": MAX_ITERATIONS,
             "n_policy_layers" : N_POLICY_LAYERS,
             "n_value_net_layers" : N_VALUE_NET_LAYERS,
+            "n_pref_iterations" : N_PREF_ITERATIONS,
+            "n_reward_steps" : N_REWARD_STEPS
             }
         )
         # log the file that is used to generate artificial human preferences
         mlflow.log_artifact("model/rlhf/generate_preference.py")
-        
-        # keep track of steps for the various quantities that we track
-        logging_steps = 0
+        '''
 
         for itr in range(MAX_ITERATIONS):
             # --- Collect preference data and train reward model
             for epoch in range(N_REWARD_EPOCHS):
 
+                reward_model_epoch(
+                    env, 
+                    policy, 
+                    reward_model, 
+                    reward_optimizer
+                )
+
                 # reset the environment every so often
-                if epoch > 0 and epoch % ENV_RESET_INTERVAL == 0:
-                    logger.debug(f"Resetting environment...")
-                    env.close()
-                    time.sleep(5)
-                    env = create_env(interactive = False, realtime = False)
-                    env = RLHFActionWrapper(env)
-                    env = GrayscaleWrapper(env)
-                    env = FrameStackWrapper(env, N_FRAMES)
-                    logger.debug(f"Created new environment!")
-
-
-
-                # collect two segments using the policy
-                seg_a, info_a = collect_segment(policy, env, render = False)
-                seg_b, info_b = collect_segment(policy, env, render = False)
-                logger.debug(f"seg_a.shape: {seg_a.shape}")
-
-                # log the preference metrics for segment a
-                mlflow.log_metrics(rlhf_wrapper.get_preference_metrics(info_b), step = logging_steps)
-
-
-                # get human preference of the two sequences that were observed
-                pref = get_human_preference(info_a, info_b)
-                
-                # update the reward model
-                reward_optimizer.zero_grad()
-                loss = preference_loss(reward_model, seg_a, seg_b, pref)
-                loss.backward()
-                reward_optimizer.step()
-
-                # log the preference loss for the reward model
-                mlflow.log_metrics({
-                    "preference_loss" : loss.item(),
-                }, step = logging_steps)
-                logging_steps += 1
-
-                # print out training update for the reward model
-                print(f"  Epoch {epoch:3d} | Reward model loss: {loss.item():.4f}")
+                logger.debug(f"Resetting environment...")
+                env.close()
+                time.sleep(5)
+                env = create_env(interactive = False, realtime = False)
+                env = RLHFActionWrapper(env)
+                env = GrayscaleWrapper(env)
+                env = FrameStackWrapper(env, N_FRAMES)
+                logger.debug(f"Created new environment!")
 
             # --- The parameters of the policy are fit using PPO
-            print("\nStarting PPO policy optimisation with learned reward model...")
-        
-            
+            print("\nStarting PPO policy optimization with learned reward model...")
 
             # do PPO rollouts using reward model
             for rollout_idx in range(N_PPO_ROLLOUTS):
                 # reset the environment every so often
-                if epoch > 0 and epoch % ENV_RESET_INTERVAL == 0:
+                if epoch > 0 and rollout_idx % ENV_RESET_INTERVAL == 0:
                     logger.debug(f"Resetting environment...")
                     env.close()
                     time.sleep(5)
@@ -224,14 +258,14 @@ def train(create_env):
                     env = GrayscaleWrapper(env)
                     env = FrameStackWrapper(env, N_FRAMES)
                     logger.debug(f"Created new environment!")
-                    
+
                 logger.debug(f"PPO rollout {rollout_idx}")
         
                 # 1. Collect one episode of experience using the current policy
                 rollout, info = collect_ppo_rollout(policy, value_net, reward_model, env)
                 logger.debug(f"collected rollout...")
                 # log the info for this rollout
-                mlflow.log_metrics(rlhf_wrapper.get_preference_metrics(info), step = logging_steps)
+                mlflow.log_metrics(rlhf_wrapper.get_preference_metrics(info), step = ppo_rollout_steps)
         
                 # 2. Run PPO update passes over that experience
                 p_loss, v_loss, entropy = ppo_update(policy, value_net, ppo_optimizer, rollout)
@@ -241,18 +275,18 @@ def train(create_env):
                     "policy_loss" : p_loss,
                     "value_loss" : v_loss, 
                     "entropy" : entropy, 
-                }, step = logging_steps)
-                logging_steps += 1
-                if rollout_idx % 20 == 0:
-                    mean_reward = rollout["rewards"].mean().item()
-                    mlflow.log_metrics({"mean_reward" : mean_reward}, step = logging_steps)
-                    print(
-                        f"  Rollout {rollout_idx:4d} | "
-                        f"Policy loss: {p_loss:.4f} | "
-                        f"Value loss: {v_loss:.4f} | "
-                        f"Entropy: {entropy:.4f} | "
-                        f"Mean reward: {mean_reward:.4f}"
-                    )
+                }, step = ppo_rollout_steps)
+                mean_reward = rollout["rewards"].mean().item()
+                mlflow.log_metrics({"mean_reward" : mean_reward}, step = ppo_rollout_steps)
+                print(
+                    f"  Rollout {rollout_idx:4d} | "
+                    f"Policy loss: {p_loss:.4f} | "
+                    f"Value loss: {v_loss:.4f} | "
+                    f"Entropy: {entropy:.4f} | "
+                    f"Mean reward: {mean_reward:.4f}"
+                )
+                ppo_rollout_steps += 1
+
 
             # PPO Update completed
             # Save checkpoint

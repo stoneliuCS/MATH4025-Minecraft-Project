@@ -35,7 +35,7 @@ def get_human_preference(info_a, info_b):
         metric = rlhf_wrapper.fraction_of_time_attacking_wood,
         info_a = info_a,
         info_b = info_b, 
-        threshold = 0.01
+        threshold = 0.0005
     )
     if fraction_of_time_attacking_wood is not None:
         return fraction_of_time_attacking_wood
@@ -46,7 +46,7 @@ def get_human_preference(info_a, info_b):
         metric = rlhf_wrapper.fraction_of_time_moving_towards_wood,
         info_a = info_a,
         info_b = info_b, 
-        threshold = 0.01
+        threshold = 0.001
     )
     if fraction_of_time_moving_towards_wood is not None:
         return fraction_of_time_moving_towards_wood
@@ -57,7 +57,7 @@ def get_human_preference(info_a, info_b):
         metric = rlhf_wrapper.fraction_of_time_looking_at_wood,
         info_a = info_a,
         info_b = info_b, 
-        threshold = 0.01
+        threshold = 0.001
     )
     if fraction_of_time_looking_at_wood is not None:
         return fraction_of_time_looking_at_wood

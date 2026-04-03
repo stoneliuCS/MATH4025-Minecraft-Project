@@ -36,6 +36,7 @@ class CNNEncoder(nn.Module):
         Returns:
             features: (T, out_dim)
         """
+        print(obs_flat.shape)
         if len(obs_flat.shape) == 3:
             batch, T, _ = obs_flat.shape
         elif len(obs_flat.shape) == 2:
