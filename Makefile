@@ -17,7 +17,7 @@ export PYTHONPATH
 INTERACTIVE_PORT ?= 6666
 MINERL_SRC ?= $(PROJECT_ROOT)/minerl
 
-.PHONY: help env venv check-java check-python print-env run run-learned dqn dqn-eval sac sac-pretrain eval-checkpoints interactor patch-minerl
+.PHONY: help env venv check-java check-python print-env run run-learned dqn dqn-eval sac sac-pretrain eval-checkpoints interactor patch-minerl view
 
 help:
 	@echo "Targets:"
@@ -150,6 +150,16 @@ ppo: env
 	  $(if $(CHECKPOINT),--checkpoint "$(CHECKPOINT)",) \
 	  $(if $(TIMESTEPS),--timesteps "$(TIMESTEPS)",) \
 	  $(if $(CHECKPOINT_OUT),--checkpoint-out "$(CHECKPOINT_OUT)",)
+
+ALGO ?= ppo
+EPISODES ?= 0
+
+view: env
+	@JAVA_HOME="$(JAVA_HOME_8)" PATH="$(JAVA_HOME_8)/bin:$$PATH" \
+	"$(VENV_DIR)/bin/python" -m model.view \
+	  --algo "$(ALGO)" \
+	  --checkpoint "$(CHECKPOINT)" \
+	  $(if $(filter-out 0,$(EPISODES)),--episodes "$(EPISODES)",)
 
 interactor: env
 	@JAVA_HOME="$(JAVA_HOME_8)" PATH="$(JAVA_HOME_8)/bin:$$PATH" \
