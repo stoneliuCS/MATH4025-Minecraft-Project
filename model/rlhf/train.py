@@ -66,8 +66,7 @@ def save_checkpoint(policy, value_net, reward_model):
  
 def preprocess_state(state):
     state = torch.from_numpy(state.astype(np.float32) / 255.0)[0].flatten().unsqueeze(0)
-    return state
- 
+    return state 
  
 def rebuild_env(create_env):
     """
@@ -91,14 +90,12 @@ def rebuild_env(create_env):
                 time.sleep(ENV_RETRY_DELAY)
     raise RuntimeError(f"Failed to create environment after {ENV_RETRY_ATTEMPTS} attempts.")
  
- 
 def safe_env_close(env):
     """Try to close the environment gracefully, ignoring any errors."""
     try:
         env.close()
     except Exception as e:
         logger.warning(f"Error while closing environment (ignoring): {e}")
- 
  
 def collect_segment(policy, env, render=True):
     """
@@ -126,7 +123,6 @@ def collect_segment(policy, env, render=True):
  
     segment = torch.tensor(np.array(obs_list), dtype=torch.float32).unsqueeze(0)
     return segment, copy.deepcopy(final_info['location_stat_history'])
- 
  
 def reward_model_epoch(env, create_env, policy, reward_model, reward_optimizer):
     global logging_steps
@@ -295,12 +291,18 @@ def train(create_env):
                 time.sleep(5)
                 env = rebuild_env(create_env)
                 logger.debug(f"Created new environment!")
+            
+            # --- now that we have finished this, we can save a checkpoint
+            save_checkpoint(
+                policy, value_net, reward_model
+            )
  
             # --- The parameters of the policy are fit using PPO
             print("\nStarting PPO policy optimization with learned reward model...")
  
             # do PPO rollouts using reward model
             for rollout_idx in range(N_PPO_ROLLOUTS):
+            
                 # reset the environment every so often
                 if epoch > 0 and rollout_idx % ENV_RESET_INTERVAL == 0:
                     logger.debug(f"Resetting environment...")
@@ -357,3 +359,7 @@ def train(create_env):
                 )
                 ppo_rollout_steps += 1
 
+            # --- Save checkpoint for the PPO rollout
+            save_checkpoint(
+                policy, value_net, reward_model
+            )
