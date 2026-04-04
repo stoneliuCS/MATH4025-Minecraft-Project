@@ -36,11 +36,33 @@ mlflow.set_experiment("RLHF Experiment 1")
  
 # --- keep track of steps for the various quantities that we track
 logging_steps = 0
-ppo_rollout_steps = 50
-reward_optimization_steps = 50
+ppo_rollout_steps = 0
+reward_optimization_steps = 0
 
 # --- remember the paths of all the checkpoints that were saved during this run
 checkpoint_paths = []
+
+def save_checkpoint(policy, value_net, reward_model):
+    global checkpoint_paths
+    global ppo_rollout_steps
+    global reward_optimization_steps
+    # PPO Update completed
+    # Save checkpoint
+    print(f"Finished PPO rollouts\nSaving Checkpoint...")
+    now = datetime.now()
+    run_name = mlflow.active_run().data.tags.get("mlflow.runName")
+    os.makedirs(f'{CHECKPOINT_DIR}/{run_name}', exist_ok=True)
+    checkpoint_path = f'{CHECKPOINT_DIR}/{run_name}/checkpoint_{now.strftime("%M")}.{now.strftime("%H")}.{now.strftime("%d")}.{now.strftime("%m")}.{now.strftime("%Y")}.pt'
+    torch.save({
+        "policy": policy.state_dict(),
+        "value_net": value_net.state_dict(),
+        "reward_model": reward_model.state_dict(),
+        "ppo_rollout_steps" : ppo_rollout_steps,
+        "reward_optimization_steps" :reward_optimization_steps
+    }, checkpoint_path)
+    checkpoint_paths.append(checkpoint_path)
+    # log this checkpoint with MLFlow
+    mlflow.log_text("\n".join(checkpoint_paths), "checkpoint_paths.txt")
  
 def preprocess_state(state):
     state = torch.from_numpy(state.astype(np.float32) / 255.0)[0].flatten().unsqueeze(0)
@@ -181,6 +203,7 @@ def train(create_env):
     
     '''
     global ppo_rollout_steps
+    global reward_optimization_steps
     
     # create the environment for the first time
     env = rebuild_env(create_env)
@@ -197,6 +220,8 @@ def train(create_env):
         policy.load_state_dict(checkpoint['policy'])
         reward_model.load_state_dict(checkpoint['reward_model'])
         value_net.load_state_dict(checkpoint['value_net'])
+        ppo_rollout_steps = checkpoint['ppo_rollout_steps']
+        reward_optimization_steps = checkpoint['reward_optimization_steps']
         logger.info(f"loaded checkpoint from: {START_CHECKPOINT}")
     
 
@@ -210,8 +235,8 @@ def train(create_env):
     )
  
     
-    with mlflow.start_run(run_id="6a9e98a708d14b18bafdbb8d7b7e5cff"):
-        '''
+    with mlflow.start_run():
+        
         mlflow.log_params(
             {
             "n_actions": N_ACTIONS,
@@ -243,7 +268,6 @@ def train(create_env):
         )
         # log the file that is used to generate artificial human preferences
         mlflow.log_artifact("model/rlhf/generate_preference.py")
-        '''
  
         for itr in range(MAX_ITERATIONS):
             # --- Collect preference data and train reward model
@@ -332,38 +356,4 @@ def train(create_env):
                     f"Mean reward: {mean_reward:.4f}"
                 )
                 ppo_rollout_steps += 1
- 
- 
-            # PPO Update completed
-            # Save checkpoint
-            print(f"Finished PPO rollouts\nSaving Checkpoint...")
-            now = datetime.now()
-            run_name = mlflow.active_run().data.tags.get("mlflow.runName")
-            os.makedirs(f'{CHECKPOINT_DIR}/{run_name}', exist_ok=True)
-            checkpoint_path = f'{CHECKPOINT_DIR}/{run_name}/checkpoint_{now.strftime("%M")}.{now.strftime("%H")}.{now.strftime("%d")}.{now.strftime("%m")}.{now.strftime("%Y")}.pt'
-            torch.save({
-                "policy": policy.state_dict(),
-                "value_net": value_net.state_dict(),
-                "reward_model": reward_model.state_dict()
-            }, checkpoint_path)
-            checkpoint_paths.append(checkpoint_path)
-            # log this checkpoint with MLFlow
-            mlflow.log_text("\n".join(checkpoint_paths), "checkpoint_paths.txt")
 
-def save_checkpoint(policy, value_net, reward_model):
-    global checkpoint_paths
-    # PPO Update completed
-    # Save checkpoint
-    print(f"Finished PPO rollouts\nSaving Checkpoint...")
-    now = datetime.now()
-    run_name = mlflow.active_run().data.tags.get("mlflow.runName")
-    os.makedirs(f'{CHECKPOINT_DIR}/{run_name}', exist_ok=True)
-    checkpoint_path = f'{CHECKPOINT_DIR}/{run_name}/checkpoint_{now.strftime("%M")}.{now.strftime("%H")}.{now.strftime("%d")}.{now.strftime("%m")}.{now.strftime("%Y")}.pt'
-    torch.save({
-        "policy": policy.state_dict(),
-        "value_net": value_net.state_dict(),
-        "reward_model": reward_model.state_dict()
-    }, checkpoint_path)
-    checkpoint_paths.append(checkpoint_path)
-    # log this checkpoint with MLFlow
-    mlflow.log_text("\n".join(checkpoint_paths), "checkpoint_paths.txt")

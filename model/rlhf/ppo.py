@@ -1,6 +1,7 @@
 import torch 
 import torch.nn as nn
 from hyperparameters import MAX_STEPS_PER_EPISODE, PPO_GAMMA, PPO_LAMBDA, PPO_EPOCHS, PPO_CLIP, VALUE_COEF, ENTROPY_COEF
+import numpy as np
 
 def preprocess_state(state):
     state = torch.from_numpy(state.astype(np.float32) / 255.0)[0].flatten().unsqueeze(0)
