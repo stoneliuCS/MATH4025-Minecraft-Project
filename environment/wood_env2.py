@@ -292,7 +292,7 @@ class GatherWoodEnvironment(HumanControlEnvSpec):
             handlers.FOVSetting(70.0),
             handlers.FakeCursorSize(16),
             handlers.GuiScale(1),
-            handlers.PreferredSpawnBiome("forest"),
+            handlers.PreferredSpawnBiome("taiga"),
         ]
 
     @override
