@@ -38,18 +38,18 @@ def _build_ppo_env(env_name: str, checkpoint_dir: str):
     return env
 
 
-def _build_sac_env(env_name: str):
+def _build_sac_env(env_name: str, n_stack: int = 4):
     from stable_baselines3.common.vec_env import DummyVecEnv, VecFrameStack
 
     env = DummyVecEnv([lambda: GymV21CompatibilityV0(
         env_id=env_name,
         env=make_wood_env(env_name, render=True, interactive=True),
     )])
-    env = VecFrameStack(env, n_stack=4)
+    env = VecFrameStack(env, n_stack=n_stack)
     return env
 
 
-def view(algo: str, checkpoint: str, episodes: int = 0):
+def view(algo: str, checkpoint: str, episodes: int = 0, n_stack: int = 4):
     """
     Run the model indefinitely (episodes=0) or for a fixed number of episodes.
     Actions are deterministic — no exploration, no gradient updates.
@@ -65,7 +65,7 @@ def view(algo: str, checkpoint: str, episodes: int = 0):
         model = PPO.load(checkpoint, env=env, device="auto")
     elif algo == "sac":
         from stable_baselines3 import SAC
-        env = _build_sac_env(env_name)
+        env = _build_sac_env(env_name, n_stack=n_stack)
         model = SAC.load(checkpoint, env=env, device="auto")
     else:
         raise ValueError(f"Unknown algo: {algo}")
@@ -96,5 +96,6 @@ if __name__ == "__main__":
     parser.add_argument("--algo", choices=["sac", "ppo"], required=True)
     parser.add_argument("--checkpoint", required=True, help="Path to checkpoint .zip")
     parser.add_argument("--episodes", type=int, default=0, help="Episodes to run (0 = infinite)")
+    parser.add_argument("--n-stack", type=int, default=4, help="Frame stack size (default 4)")
     args = parser.parse_args()
-    view(algo=args.algo, checkpoint=args.checkpoint, episodes=args.episodes)
+    view(algo=args.algo, checkpoint=args.checkpoint, episodes=args.episodes, n_stack=args.n_stack)

@@ -153,12 +153,14 @@ ppo: env
 
 ALGO ?= ppo
 EPISODES ?= 0
+N_STACK ?= 4
 
 view: env
 	@JAVA_HOME="$(JAVA_HOME_8)" PATH="$(JAVA_HOME_8)/bin:$$PATH" \
 	"$(VENV_DIR)/bin/python" -m model.view \
 	  --algo "$(ALGO)" \
 	  --checkpoint "$(CHECKPOINT)" \
+	  --n-stack "$(N_STACK)" \
 	  $(if $(filter-out 0,$(EPISODES)),--episodes "$(EPISODES)",)
 
 interactor: env

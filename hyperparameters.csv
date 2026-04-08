@@ -1,0 +1,27 @@
+Parameter,SAC Main v2,PPO Main v1,SAC Fine-tuned v6,PPO Taiga v1,SAC Taiga v1
+Algorithm,SAC,PPO,SAC,PPO,SAC
+Learning Rate,3e-4,1e-4,3e-4,1e-4,3e-4
+Batch Size,512,256,256,256,512
+Total Timesteps,1266367,1324302,568513,1104536,646896
+Avg Wood/Episode,3.27,62.62,3.90,78.88,2.29
+Gamma,0.99,0.995,0.99,0.995,0.99
+Buffer Size,500000,—,1000,—,500000
+Learning Starts,500,—,0,—,500
+Tau,0.005,—,0.005,—,0.005
+Gradient Steps,8,—,1,—,8
+Ent Coef,auto,0.01,auto,0.01,auto
+Target Entropy,-8.0,—,-8.0,—,-8.0
+Target Update Int,1,—,1,—,1
+Train Freq (steps),4,—,1,—,4
+Replay Buf n_steps,10,—,1,—,10
+Optimize Memory,False,—,False,—,False
+Use SDE,False,False,False,False,False
+N Steps,—,2048,—,2048,—
+N Epochs,—,10,—,10,—
+GAE Lambda,—,0.95,—,0.95,—
+Clip Range,—,0.2,—,0.2,—
+VF Coef,—,0.5,—,0.5,—
+Max Grad Norm,—,0.5,—,0.5,—
+Normalize Advantage,—,True,—,True,—
+Clip Range VF,—,None,—,None,—
+Target KL,—,None,—,None,—
